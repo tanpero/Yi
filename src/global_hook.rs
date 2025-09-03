@@ -104,6 +104,11 @@ unsafe extern "system" fn keyboard_proc(
             return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
         }
         
+        // 检测组合键状态
+        let ctrl_pressed = GetAsyncKeyState(VK_CONTROL) & 0x8000u16 as i16 != 0;
+        let alt_pressed = GetAsyncKeyState(VK_MENU) & 0x8000u16 as i16 != 0;
+        let shift_pressed = GetAsyncKeyState(VK_SHIFT) & 0x8000u16 as i16 != 0;
+        
         // F4 键切换输入法状态
         if kb_struct.vkCode == VK_F4 as u32 && is_key_down {
             if let Some(ref active) = GLOBAL_ACTIVE {
@@ -125,8 +130,33 @@ unsafe extern "system" fn keyboard_proc(
         if is_active {
             println!("输入法已激活，检查按键: vk_code={}", kb_struct.vkCode);
             
-            // 处理字母键 A-Z
-            if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A {
+            // 如果缓冲区为空，只拦截纯字母键，其他所有按键（包括组合键）都让系统处理
+            if INPUT_BUFFER_EMPTY {
+                // 只有在没有任何修饰键按下时才拦截字母键
+                if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A && !ctrl_pressed && !alt_pressed {
+                    println!("发送字母键事件: {}", kb_struct.vkCode);
+                    if let Some(ref sender) = GLOBAL_SENDER {
+                        let event = KeyEvent {
+                            vk_code: kb_struct.vkCode,
+                            scan_code: kb_struct.scanCode,
+                            flags: kb_struct.flags,
+                            is_key_down,
+                        };
+                        if let Err(e) = sender.send(event) {
+                            println!("发送事件失败: {:?}", e);
+                        }
+                    }
+                    return 1; // 阻止按键传递给应用程序
+                } else {
+                    // 缓冲区为空时，所有其他按键（包括组合键）都让系统处理
+                    return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
+                }
+            }
+            
+            // 缓冲区不为空时的处理逻辑
+            
+            // 处理字母键 A-Z（只有在没有修饰键时才作为输入处理）
+            if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A && !ctrl_pressed && !alt_pressed {
                 println!("发送字母键事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -142,12 +172,7 @@ unsafe extern "system" fn keyboard_proc(
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理数字键 1-9
-            else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 {
-                // 如果输入缓冲区为空，不拦截数字键，让系统处理
-                if INPUT_BUFFER_EMPTY {
-                    return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
-                }
-                
+            else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 && !ctrl_pressed && !alt_pressed {
                 println!("发送数字键事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -163,12 +188,7 @@ unsafe extern "system" fn keyboard_proc(
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理退格键
-            else if kb_struct.vkCode == VK_BACK as u32 {
-                // 如果输入缓冲区为空，不拦截退格键，让系统处理
-                if INPUT_BUFFER_EMPTY {
-                    return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
-                }
-                
+            else if kb_struct.vkCode == VK_BACK as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送退格键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -184,7 +204,7 @@ unsafe extern "system" fn keyboard_proc(
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理空格键
-            else if kb_struct.vkCode == VK_SPACE as u32 {
+            else if kb_struct.vkCode == VK_SPACE as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送空格键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -200,7 +220,7 @@ unsafe extern "system" fn keyboard_proc(
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理ESC键
-            else if kb_struct.vkCode == VK_ESCAPE as u32 {
+            else if kb_struct.vkCode == VK_ESCAPE as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送ESC键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -214,6 +234,33 @@ unsafe extern "system" fn keyboard_proc(
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
+            }
+            // 处理特殊标点符号按键（缓冲区不为空时）
+            else if !INPUT_BUFFER_EMPTY && (
+                kb_struct.vkCode == 0xDB || // [ 键
+                kb_struct.vkCode == 0xDD || // ] 键
+                kb_struct.vkCode == 0xDC || // \ 键
+                kb_struct.vkCode == 0xBA || // ; 键
+                kb_struct.vkCode == 0xBC || // , 键
+                kb_struct.vkCode == 0xBE    // . 键
+            ) {
+                println!("发送特殊标点符号事件: {}", kb_struct.vkCode);
+                if let Some(ref sender) = GLOBAL_SENDER {
+                    let event = KeyEvent {
+                        vk_code: kb_struct.vkCode,
+                        scan_code: kb_struct.scanCode,
+                        flags: kb_struct.flags,
+                        is_key_down,
+                    };
+                    if let Err(e) = sender.send(event) {
+                        println!("发送事件失败: {:?}", e);
+                    }
+                }
+                return 1; // 阻止按键传递给应用程序
+            }
+            // 所有其他按键（包括组合键）都让系统处理
+            else {
+                return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
             }
         }
     }

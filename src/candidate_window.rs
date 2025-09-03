@@ -89,7 +89,8 @@ impl CandidateWindow {
         
         self.selected_index = 0;
         
-        if !self.candidates.lock().unwrap().is_empty() {
+        // 只要有输入内容就显示窗口（不管是否有候选词）
+        if !input.is_empty() {
             unsafe {
                 ShowWindow(self.hwnd, SW_SHOW);
                 InvalidateRect(self.hwnd, ptr::null(), 1);
@@ -112,6 +113,9 @@ impl CandidateWindow {
                     SWP_SHOWWINDOW
                 );
             }
+        } else {
+            // 输入为空时隐藏窗口
+            self.hide();
         }
     }
     
