@@ -36,7 +36,7 @@ impl GlobalIME {
         hook.install()?;
         
         let mut candidate_window = CandidateWindow::new()?;
-        candidate_window.create_window()?;
+        candidate_window.create_window()?; // 恢复这行
         
         let text_injector = TextInjector::new();
         let tray_icon = TrayIcon::new()?;
@@ -96,20 +96,14 @@ impl GlobalIME {
             return Ok(());
         }
         
-        // 如果输入缓冲区为空，让数字键和退格键正常工作
-        if self.input_buffer.is_empty() {
-            // 对于数字键1-9和退格键，不拦截，让系统处理
-            if (event.vk_code >= 0x31 && event.vk_code <= 0x39) || event.vk_code == VK_BACK as u32 {
-                // 返回Ok但不处理，让按键传递给系统
-                return Ok(());
-            }
-        }
-        
         // 处理退格键
         if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
                 self.input_buffer.pop();
                 println!("退格后输入缓冲区: '{}'", self.input_buffer);
+                
+                // 更新全局钩子的缓冲区状态
+                crate::global_hook::set_input_buffer_empty(self.input_buffer.is_empty());
                 
                 if self.input_buffer.is_empty() {
                     self.candidate_window.hide();
@@ -149,9 +143,21 @@ impl GlobalIME {
             println!("转换的字符: '{}'", ch);
             
             if ch >= 'a' && ch <= 'z' {
+                // 直接添加字符到输入缓冲区，不进行合法性检查
                 self.input_buffer.push(ch);
                 println!("当前输入缓冲区: '{}'", self.input_buffer);
-                self.update_candidates();
+                
+                // 更新全局钩子的缓冲区状态
+                crate::global_hook::set_input_buffer_empty(false);
+                
+                // 只有在输入序列合法时才更新候选项
+                if self.is_valid_input_sequence(&self.input_buffer) {
+                    self.update_candidates();
+                } else {
+                    // 输入不合法时，仍然显示输入框但不更新候选项
+                    // 这里可以显示一个空的候选列表或保持之前的候选项
+                    self.candidate_window.show_candidates(vec![], &self.input_buffer);
+                }
             }
             return Ok(());
         }
@@ -169,6 +175,10 @@ impl GlobalIME {
         if event.vk_code == VK_ESCAPE as u32 {
             println!("ESC键取消输入");
             self.input_buffer.clear();
+            
+            // 更新全局钩子的缓冲区状态
+            crate::global_hook::set_input_buffer_empty(true);
+            
             self.candidate_window.hide();
             return Ok(());
         }
@@ -180,6 +190,12 @@ impl GlobalIME {
         if self.input_buffer.is_empty() {
             self.candidate_window.hide();
             return;
+        }
+        
+        // 检查输入是否合法（能形成有效的音节组合）
+        if !self.is_valid_input_sequence(&self.input_buffer) {
+        // 如果输入不合法，保持当前候选项不变，不更新
+        return;
         }
         
         let mut candidates = Vec::new();
@@ -252,14 +268,14 @@ impl GlobalIME {
             let base_text = &text[..pos];
             // 如果包含[部首]标记，去除它
             if base_text.starts_with("[部首] ") {
-                &base_text[7..] // 去掉"[部首] "前缀（7个字节）
+                &base_text[9..] // 去掉"[部首] "前缀（7个字节）
             } else {
                 base_text
             }
         } else {
             // 处理没有括号的情况，也可能包含[部首]标记
             if text.starts_with("[部首] ") {
-                &text[7..]
+                &text[9..]
             } else {
                 text
             }
@@ -279,9 +295,49 @@ impl GlobalIME {
         
         // 清空输入缓冲区并隐藏候选窗口
         self.input_buffer.clear();
+        
+        // 更新全局钩子的缓冲区状态
+        crate::global_hook::set_input_buffer_empty(true);
+        
         self.candidate_window.hide();
         
         Ok(())
+    }
+    
+    // 添加新的辅助方法来验证输入序列的合法性
+    fn is_valid_input_sequence(&self, input: &str) -> bool {
+        // 1. 检查是否为完整音节
+        if self.yi_engine.syllable_set.contains(input) {
+            return true;
+        }
+        
+        // 2. 检查是否为潜在的声母或声母组合
+        if input.len() <= 3 && self.is_potential_consonant(input) {
+            return true;
+        }
+        
+        // 3. 检查是否能通过智能分词形成有效组合
+        let segment_results = self.yi_engine.segment_pinyin(input);
+        if !segment_results.is_empty() {
+            return true;
+        }
+        
+        // 4. 检查是否为部分有效音节（允许用户继续输入）
+        // 例如：用户输入"zh"，虽然不是完整音节，但可能要输入"zha"、"zhe"等
+        for syllable in &self.yi_engine.syllable_set {
+            if syllable.starts_with(input) {
+                return true;
+            }
+        }
+        
+        // 5. 检查部首拼音的前缀匹配
+        for pinyin in self.yi_engine.radical_pinyin_index.keys() {
+            if pinyin.starts_with(input) {
+                return true;
+            }
+        }
+        
+        false
     }
 }
 

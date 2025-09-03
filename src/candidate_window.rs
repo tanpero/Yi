@@ -15,28 +15,22 @@ pub struct CandidateWindow {
     hwnd: HWND,
     candidates: Arc<Mutex<Vec<String>>>,
     selected_index: usize,
+    current_input: Arc<Mutex<String>>, // 添加当前输入的存储
 }
 
 impl CandidateWindow {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let candidates = Arc::new(Mutex::new(Vec::new()));
+        let current_input = Arc::new(Mutex::new(String::new()));
         unsafe {
             GLOBAL_CANDIDATES = Some(candidates.clone());
+            GLOBAL_INPUT = Some(current_input.clone());
         }
         
-        let window = CandidateWindow {
-            hwnd: ptr::null_mut(),
-            candidates,
-            selected_index: 0,
-        };
-        Ok(window)
-    }
-    
-    // 添加缺失的 create_window 方法
-    pub fn create_window(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe {
+        // 创建窗口
+        let hwnd = unsafe {
+            // 注册窗口类
             let class_name = to_wide_string("YiCandidateWindow");
-            
             let wc = WNDCLASSEXW {
                 cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
                 style: CS_HREDRAW | CS_VREDRAW,
@@ -54,24 +48,31 @@ impl CandidateWindow {
             
             RegisterClassExW(&wc);
             
-            self.hwnd = CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            // 创建窗口
+            CreateWindowExW(
+                WS_EX_TOPMOST | WS_EX_NOACTIVATE,
                 class_name.as_ptr(),
-                to_wide_string("Yi Candidate Window").as_ptr(),
+                to_wide_string("候选词窗口").as_ptr(),
                 WS_POPUP | WS_BORDER,
-                CW_USEDEFAULT, CW_USEDEFAULT,
-                300, 150,
+                0, 0, 300, 200,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 GetModuleHandleW(ptr::null()),
                 ptr::null_mut()
-            );
-            
-            if self.hwnd.is_null() {
-                return Err("Failed to create candidate window".into());
-            }
+            )
+        };
+        
+        if hwnd.is_null() {
+            return Err("创建候选词窗口失败".into());
         }
-        Ok(())
+        
+        let window = CandidateWindow {
+            hwnd,
+            candidates,
+            selected_index: 0,
+            current_input,
+        };
+        Ok(window)
     }
     
     pub fn show_candidates(&mut self, candidates: Vec<String>, input: &str) {
@@ -80,29 +81,13 @@ impl CandidateWindow {
         if let Ok(mut guard) = self.candidates.lock() {
             *guard = candidates;
         }
-        self.selected_index = 0;
         
-        if !self.candidates.lock().unwrap().is_empty() {
-            unsafe {
-                ShowWindow(self.hwnd, SW_SHOW);
-                InvalidateRect(self.hwnd, ptr::null(), 1); // 强制重绘
-                UpdateWindow(self.hwnd);
-                
-                // 获取当前光标位置
-                let mut cursor_pos = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut cursor_pos);
-                
-                // 将窗口移动到光标附近
-                SetWindowPos(
-                    self.hwnd,
-                    HWND_TOPMOST,
-                    cursor_pos.x,
-                    cursor_pos.y + 20,
-                    300, 150,
-                    SWP_SHOWWINDOW
-                );
-            }
+        // 更新当前输入
+        if let Ok(mut input_guard) = self.current_input.lock() {
+            *input_guard = input.to_string();
         }
+        
+        self.selected_index = 0;
         
         if !self.candidates.lock().unwrap().is_empty() {
             unsafe {
@@ -113,9 +98,10 @@ impl CandidateWindow {
                 let mut cursor_pos = POINT { x: 0, y: 0 };
                 GetCursorPos(&mut cursor_pos);
                 
-                // 根据候选词数量调整窗口高度
+                // 根据候选词数量调整窗口高度，为输入框预留空间
                 let candidate_count = self.candidates.lock().unwrap().len();
-                let window_height = 30 + candidate_count * 22; // 为更大字体调整高度
+                let input_box_height = 30; // 输入框高度
+                let window_height = input_box_height + 10 + candidate_count * 22; // 总高度
                 
                 SetWindowPos(
                     self.hwnd,
@@ -164,7 +150,51 @@ impl CandidateWindow {
             0
         }
     }
+    
+    pub fn create_window(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe {
+            // 注册窗口类
+            let class_name = to_wide_string("YiCandidateWindow");
+            let wc = WNDCLASSEXW {
+                cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+                style: CS_HREDRAW | CS_VREDRAW,
+                lpfnWndProc: Some(window_proc),
+                cbClsExtra: 0,
+                cbWndExtra: 0,
+                hInstance: GetModuleHandleW(ptr::null()),
+                hIcon: ptr::null_mut(),
+                hCursor: LoadCursorW(ptr::null_mut(), IDC_ARROW),
+                hbrBackground: (COLOR_WINDOW + 1) as HBRUSH,
+                lpszMenuName: ptr::null(),
+                lpszClassName: class_name.as_ptr(),
+                hIconSm: ptr::null_mut(),
+            };
+            
+            RegisterClassExW(&wc);
+            
+            // 创建窗口
+            self.hwnd = CreateWindowExW(
+                WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+                class_name.as_ptr(),
+                to_wide_string("候选词窗口").as_ptr(),
+                WS_POPUP | WS_BORDER,
+                0, 0, 300, 200,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null_mut()
+            );
+            
+            if self.hwnd.is_null() {
+                return Err("创建候选词窗口失败".into());
+            }
+        }
+        Ok(())
+    }
 }
+
+// 添加全局输入存储
+static mut GLOBAL_INPUT: Option<Arc<Mutex<String>>> = None;
 
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
@@ -188,13 +218,9 @@ unsafe extern "system" fn window_proc(
             let font_name = to_wide_string("等线");
             let font = CreateFontW(
                 -18, // 14pt ≈ 18 pixels
-                0,
-                0,
-                0,
+                0, 0, 0,
                 FW_NORMAL,
-                0,
-                0,
-                0,
+                0, 0, 0,
                 DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS,
                 CLIP_DEFAULT_PRECIS,
@@ -205,15 +231,49 @@ unsafe extern "system" fn window_proc(
             
             let old_font = SelectObject(hdc, font as *mut _);
             
-            // 绘制实际的候选词
+            let mut y = 10;
+            
+            // 绘制输入框背景
+            let input_rect = RECT {
+                left: 5,
+                top: 5,
+                right: 295,
+                bottom: 30,
+            };
+            
+            // 设置输入框背景色（浅灰色）
+            let brush = CreateSolidBrush(RGB(240, 240, 240));
+            FillRect(hdc, &input_rect, brush);
+            DeleteObject(brush as *mut _);
+            
+            // 绘制输入框边框
+            let pen = CreatePen(PS_SOLID as i32, 1, RGB(128, 128, 128));
+            let old_pen = SelectObject(hdc, pen as *mut _);
+            Rectangle(hdc, input_rect.left, input_rect.top, input_rect.right, input_rect.bottom);
+            SelectObject(hdc, old_pen);
+            DeleteObject(pen as *mut _);
+            
+            // 绘制当前输入的字母序列
+            if let Some(ref input_arc) = GLOBAL_INPUT {
+                if let Ok(input) = input_arc.lock() {
+                    let input_display = format!("输入: {}", input.as_str());
+                    let input_text = to_wide_string(&input_display);
+                    SetTextColor(hdc, RGB(0, 0, 0));
+                    TextOutW(hdc, 10, 10, input_text.as_ptr(), input_text.len() as i32 - 1);
+                }
+            }
+            
+            y = 40; // 候选词从输入框下方开始
+            
+            // 绘制候选词
             if let Some(ref candidates_arc) = GLOBAL_CANDIDATES {
                 if let Ok(candidates) = candidates_arc.lock() {
-                    let mut y = 10;
-                    for (i, candidate) in candidates.iter().enumerate().take(9) {
+                    for (i, candidate) in candidates.iter().enumerate() {
                         let display_text = format!("{}. {}", i + 1, candidate);
                         let text = to_wide_string(&display_text);
+                        SetTextColor(hdc, RGB(0, 0, 0));
                         TextOutW(hdc, 10, y, text.as_ptr(), text.len() as i32 - 1);
-                        y += 22; // 增加行间距以适应更大的字体
+                        y += 22;
                     }
                 }
             }

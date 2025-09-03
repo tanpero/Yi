@@ -24,6 +24,7 @@ pub struct KeyEvent {
 static mut GLOBAL_SENDER: Option<Sender<KeyEvent>> = None;
 static mut GLOBAL_ACTIVE: Option<Arc<Mutex<bool>>> = None;
 static mut GLOBAL_HAS_INPUT: Option<Arc<Mutex<bool>>> = None;
+static mut INPUT_BUFFER_EMPTY: bool = true; // 添加这个变量
 static mut INJECTING_TEXT: bool = false; // 新增：标记是否正在注入文本
 
 impl GlobalHook {
@@ -142,6 +143,11 @@ unsafe extern "system" fn keyboard_proc(
             }
             // 处理数字键 1-9
             else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 {
+                // 如果输入缓冲区为空，不拦截数字键，让系统处理
+                if INPUT_BUFFER_EMPTY {
+                    return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
+                }
+                
                 println!("发送数字键事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -158,6 +164,11 @@ unsafe extern "system" fn keyboard_proc(
             }
             // 处理退格键
             else if kb_struct.vkCode == VK_BACK as u32 {
+                // 如果输入缓冲区为空，不拦截退格键，让系统处理
+                if INPUT_BUFFER_EMPTY {
+                    return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
+                }
+                
                 println!("发送退格键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
@@ -214,5 +225,12 @@ unsafe extern "system" fn keyboard_proc(
 pub fn set_injecting_text(injecting: bool) {
     unsafe {
         INJECTING_TEXT = injecting;
+    }
+}
+
+// 添加设置输入缓冲区状态的函数
+pub fn set_input_buffer_empty(empty: bool) {
+    unsafe {
+        INPUT_BUFFER_EMPTY = empty;
     }
 }
