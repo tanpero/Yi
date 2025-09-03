@@ -1,9 +1,24 @@
 [package]
 name = "yi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 regex = "1.11.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "winuser",
+    "wingdi", 
+    "shellapi",
+    "libloaderapi",
+    "winbase",
+    "processthreadsapi",
+    "memoryapi"
+]}
+
+[[bin]]
+name = "yi-global"
+path = "src/main.rs"

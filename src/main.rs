@@ -1,118 +1,185 @@
-use serde_json::Value;
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::io::{self, Write};
-use regex::Regex;
-use std::error::Error;
-use yi::YiIME;
+mod global_hook;
+mod candidate_window;
+mod text_injector;
+mod tray_icon;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let mut ime = YiIME::new();
-    
-    // 加载字典文件
-    let dict_path = "assets/彝文音节字典.json";
-    ime.load_dictionary(dict_path)?;
-    
-    // 加载部首字典
-    let radical_dict_path = "assets/彝文部首字典.json";
-    ime.load_radical_dictionary(radical_dict_path)?;
-    
-    // 演示智能转换功能（包含部首测试）
-    println!("\n=== 智能转换演示（包含部首） ===");
-    
-    let test_cases = [
-        "abaka",      // 简单组合
-        "bapt",       // 包含歧义的p,t
-        "bary",       // 包含歧义的r,y
-        "kaw",        // 包含w替字符号
-        "ddabbapt",   // 复杂组合
-        "mgaw",       // w的歧义处理
-        "li",         // 单音节，应该包含部首候选
-        "ga",         // 单音节，应该包含部首候选
-        "yo",         // 单音节，应该包含部首候选
-    ];
-    
-    for test_case in &test_cases {
-        println!("\n测试用例: {}", test_case);
-        println!("{}", "-".repeat(30));
-        let results = ime.smart_convert(test_case);
-        ime.display_smart_results(test_case, &results);
-    }
-    
-    // 启动交互模式
-    ime.interactive_mode();
-    
-    Ok(())
+use crate::global_hook::{GlobalHook, KeyEvent};
+use crate::candidate_window::CandidateWindow;
+use crate::text_injector::TextInjector;
+use crate::tray_icon::TrayIcon;
+use yi::{YiIME};
+use winapi::um::winuser::*;
+use std::sync::mpsc::Receiver;
+use std::thread;
+use std::time::Duration;
+use winapi::shared::windef::*;
+
+struct GlobalIME {
+    yi_engine: YiIME,
+    hook: GlobalHook,
+    candidate_window: CandidateWindow,
+    text_injector: TextInjector,
+    tray_icon: TrayIcon,
+    input_buffer: String,
+    key_receiver: Receiver<KeyEvent>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basic_query_with_radical() {
-        let mut ime = YiIME::new();
+impl GlobalIME {
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let mut yi_engine = YiIME::new();
         
-        // 添加测试数据
-        ime.pinyin_index.insert("za".to_string(), vec!["ꊖ".to_string()]);
-        ime.radical_pinyin_index.insert("za".to_string(), "꒲".to_string());
-        ime.syllable_set.insert("za".to_string());
+        // 加载字典
+        yi_engine.load_dictionary("assets/彝文音节字典.json")?;
+        yi_engine.load_radical_dictionary("assets/彝文部首字典.json")?;
         
-        let results = ime.query_by_pinyin("za");
+        let (mut hook, key_receiver) = GlobalHook::new();
+        hook.install()?;
         
-        // 应该包含普通字符和部首
-        assert!(results.contains(&"ꊖ".to_string()), "应该包含普通字符");
-        assert!(results.iter().any(|r| r.contains("꒲")), "应该包含部首候选项");
+        let mut candidate_window = CandidateWindow::new()?;
+        candidate_window.create_window()?;
+        
+        let text_injector = TextInjector::new();
+        let tray_icon = TrayIcon::new()?;
+        
+        Ok(GlobalIME {
+            yi_engine,
+            hook,
+            candidate_window,
+            text_injector,
+            tray_icon,
+            input_buffer: String::new(),
+            key_receiver,
+        })
     }
-
-    #[test]
-    fn test_radical_integration() {
-        let mut ime = YiIME::new();
+    
+    fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        println!("彝文输入法已启动，按F4激活/关闭输入法");
         
-        // 添加测试数据
-        ime.pinyin_index.insert("li".to_string(), vec!["ꆹ".to_string()]);
-        ime.radical_pinyin_index.insert("li".to_string(), "꒑".to_string());
-        ime.syllable_set.insert("li".to_string());
+        // 主消息循环
+        unsafe {
+            let mut msg = MSG {
+                hwnd: std::ptr::null_mut(),
+                message: 0,
+                wParam: 0,
+                lParam: 0,
+                time: 0,
+                pt: POINT { x: 0, y: 0 },
+            };
+            
+            loop {
+                // 处理键盘事件 - 直接使用 self.key_receiver
+                while let Ok(key_event) = self.key_receiver.try_recv() {
+                    println!("收到键盘事件: {:?}", key_event); // 添加调试信息
+                    self.handle_key_event(key_event)?;
+                }
+                
+                // 处理Windows消息
+                if PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                    if msg.message == WM_QUIT {
+                        break;
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+                
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
         
-        let results = ime.smart_convert("li");
-        
-        // 应该包含部首候选
-        let has_radical = results.iter().any(|(_, candidates, _)| {
-            candidates.iter().any(|c| c.contains("꒑"))
-        });
-        
-        assert!(has_radical, "应该包含部首候选项");
+        Ok(())
     }
-
-    #[test]
-    fn test_ambiguous_segmentation() {
-        let mut ime = YiIME::new();
+    
+    fn handle_key_event(&mut self, event: KeyEvent) -> Result<(), Box<dyn std::error::Error>> {
+        println!("处理键盘事件: vk_code={}, is_key_down={}", event.vk_code, event.is_key_down);
         
-        // 添加测试数据
-        ime.pinyin_index.insert("ba".to_string(), vec!["ꀠ".to_string()]);
-        ime.pinyin_index.insert("p".to_string(), vec!["ꀋ".to_string()]);
-        ime.pinyin_index.insert("bap".to_string(), vec!["ꀡ".to_string()]);
-        ime.syllable_set.insert("ba".to_string());
-        ime.syllable_set.insert("p".to_string());
-        ime.syllable_set.insert("bap".to_string());
+        if !event.is_key_down {
+            return Ok(());
+        }
         
-        let results = ime.segment_pinyin("bap");
-        assert!(!results.is_empty());
+        // 将虚拟键码转换为字符
+        let ch = (event.vk_code as u8 as char).to_lowercase().next().unwrap_or('\0');
+        println!("转换的字符: '{}'", ch);
         
-        // 应该有多种分词方案
-        let has_single = results.iter().any(|r| r.segments == vec!["bap"]);
-        let has_split = results.iter().any(|r| r.segments == vec!["ba", "p"]);
+        if ch >= 'a' && ch <= 'z' {
+            self.input_buffer.push(ch);
+            println!("当前输入缓冲区: '{}'", self.input_buffer);
+            self.update_candidates();
+        } else if event.vk_code >= 0x31 && event.vk_code <= 0x39 { // 数字键1-9
+            let number = (event.vk_code - 0x30) as usize;
+            if let Some(selected) = self.candidate_window.select_by_number(number) {
+                self.commit_text(&selected)?;
+            }
+        } else if event.vk_code == VK_SPACE as u32 {
+            // 空格键提交第一个候选
+            if let Some(selected) = self.candidate_window.get_selected_candidate() {
+                self.commit_text(&selected)?;
+            }
+        } else if event.vk_code == VK_BACK as u32 {
+            // 退格键
+            if !self.input_buffer.is_empty() {
+                self.input_buffer.pop();
+                if self.input_buffer.is_empty() {
+                    self.candidate_window.hide();
+                } else {
+                    self.update_candidates();
+                }
+            }
+        } else if event.vk_code == VK_ESCAPE as u32 {
+            // ESC键取消输入
+            self.input_buffer.clear();
+            self.candidate_window.hide();
+        }
         
-        assert!(has_single || has_split);
+        Ok(())
     }
-
-    #[test]
-    fn test_w_replacement() {
-        let mut ime = YiIME::new();
-        ime.pinyin_index.insert("ka".to_string(), vec!["ꇤ".to_string()]);
-        ime.syllable_set.insert("ka".to_string());
+    
+    fn update_candidates(&mut self) {
+        if self.input_buffer.is_empty() {
+            self.candidate_window.hide();
+            return;
+        }
         
-        let results = ime.smart_convert("kaw");
-        assert!(!results.is_empty());
+        // 使用现有的智能转换功能
+        let results = self.yi_engine.smart_convert(&self.input_buffer);
+        
+        let mut candidates = Vec::new();
+        for (segmentation, yi_combinations, _confidence) in results.iter().take(9) {
+            for yi_text in yi_combinations.iter().take(3) { // 每个分词最多3个候选
+                if candidates.len() < 9 {
+                    candidates.push(format!("{} ({})", yi_text, segmentation));
+                }
+            }
+        }
+        
+        if !candidates.is_empty() {
+            self.candidate_window.show_candidates(candidates, &self.input_buffer);
+        }
     }
+    
+    fn commit_text(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // 提取彝文部分（去掉拼音标注）
+        let yi_text = if let Some(pos) = text.find(" (") {
+            &text[..pos]
+        } else {
+            text
+        };
+        
+        // 注入文本
+        self.text_injector.inject_text(yi_text)?;
+        
+        // 清理状态
+        self.input_buffer.clear();
+        self.candidate_window.hide();
+        
+        Ok(())
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("正在启动彝文输入法...");
+    
+    let mut ime = GlobalIME::new()?;
+    ime.run()?;
+    
+    Ok(())
 }
