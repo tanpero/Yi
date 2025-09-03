@@ -171,21 +171,66 @@ impl GlobalIME {
             return;
         }
         
-        // 使用现有的智能转换功能
-        let results = self.yi_engine.smart_convert(&self.input_buffer);
-        
         let mut candidates = Vec::new();
-        for (segmentation, yi_combinations, _confidence) in results.iter().take(9) {
-            for yi_text in yi_combinations.iter().take(3) { // 每个分词最多3个候选
-                if candidates.len() < 9 {
-                    candidates.push(format!("{} ({})", yi_text, segmentation));
+        
+        // 1. 检查是否为完整音节（优先级最高）
+        if self.yi_engine.syllable_set.contains(&self.input_buffer) {
+            let results = self.yi_engine.query_by_pinyin(&self.input_buffer);
+            for yi_char in results.iter().take(9) {
+                candidates.push(format!("{} ({})", yi_char, self.input_buffer));
+            }
+        }
+        // 2. 检查是否为声母或声母组合
+        else if self.input_buffer.len() <= 3 && self.is_potential_consonant(&self.input_buffer) {
+            // 收集声母联想结果
+            let mut consonant_results = Vec::new();
+            
+            for (pinyin, yi_chars) in &self.yi_engine.pinyin_index {
+                if pinyin.starts_with(&self.input_buffer) {
+                    for yi_char in yi_chars {
+                        consonant_results.push((yi_char.clone(), pinyin.clone()));
+                    }
+                }
+            }
+            
+            // 添加部首候选
+            for (pinyin, radical) in &self.yi_engine.radical_pinyin_index {
+                if pinyin.starts_with(&self.input_buffer) {
+                    consonant_results.push((radical.clone(), pinyin.clone()));
+                }
+            }
+            
+            consonant_results.sort();
+            consonant_results.dedup();
+            
+            for (yi_char, pinyin) in consonant_results.iter().take(9) {
+                candidates.push(format!("{} ({})", yi_char, pinyin));
+            }
+        }
+        // 3. 默认进行智能转换
+        else {
+            let results = self.yi_engine.smart_convert(&self.input_buffer);
+            for (segmentation, yi_combinations, _confidence) in results.iter().take(9) {
+                for yi_text in yi_combinations.iter().take(3) {
+                    if candidates.len() < 9 {
+                        candidates.push(format!("{} ({})", yi_text, segmentation));
+                    }
                 }
             }
         }
         
         if !candidates.is_empty() {
             self.candidate_window.show_candidates(candidates, &self.input_buffer);
+        } else {
+            self.candidate_window.hide();
         }
+    }
+    
+    // 添加辅助方法
+    fn is_potential_consonant(&self, input: &str) -> bool {
+        // 检查是否有以此开头的音节
+        self.yi_engine.pinyin_index.keys().any(|pinyin| pinyin.starts_with(input)) ||
+        self.yi_engine.radical_pinyin_index.keys().any(|pinyin| pinyin.starts_with(input))
     }
     
     fn commit_text(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -198,7 +243,7 @@ impl GlobalIME {
             text
         };
         
-        // 设置正在注入文本的标志，避免拦截我们自己发送的按键
+        // 设置正在注入文本的标志，避免拦截 ourselves发送的按键
         crate::global_hook::set_injecting_text(true);
         
         // 使用文本注入器将文本插入到当前应用程序
