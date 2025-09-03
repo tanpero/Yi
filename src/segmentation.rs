@@ -1,11 +1,25 @@
-use crate::ime::{YiIME, SegmentResult};
+use crate::ime::YiIME;
 use std::collections::HashSet;
+
+/// 分词结果
+#[derive(Debug, Clone)]
+pub struct SegmentResult {
+    /// 分词方案
+    pub segments: Vec<String>,
+    /// 对应的彝文字符
+    pub yi_chars: Vec<Vec<String>>,
+    /// 置信度分数
+    pub confidence: f32,
+}
 
 impl YiIME {
     /// 智能分词：处理有歧义的拼音序列
     pub fn segment_pinyin(&self, input: &str) -> Vec<SegmentResult> {
-        // 直接使用动态规划分词，不再处理 w 替字符号
-        let mut results = self.dp_segment(input);
+        let mut results = Vec::new();
+        
+        // 动态规划分词
+        let dp_results = self.dp_segment(input);
+        results.extend(dp_results);
         
         // 按置信度排序
         results.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
@@ -14,8 +28,6 @@ impl YiIME {
         self.deduplicate_results(results, 10)
     }
 
-    // 删除 handle_w_replacement 函数
-    
     /// 动态规划分词算法
     fn dp_segment(&self, input: &str) -> Vec<SegmentResult> {
         let chars: Vec<char> = input.chars().collect();
@@ -80,6 +92,7 @@ impl YiIME {
     /// 处理包含歧义字符的音节段
     fn handle_ambiguous_segment(&self, chars: &[char]) -> Vec<(Vec<String>, Vec<Vec<String>>, f32)> {
         let mut results = Vec::new();
+        let segment: String = chars.iter().collect();
         
         // 检查是否包含歧义字符
         let has_ambiguous = chars.iter().any(|&c| Self::is_ambiguous_char(c));
