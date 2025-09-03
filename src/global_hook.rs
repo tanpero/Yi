@@ -9,6 +9,7 @@ pub struct GlobalHook {
     hook: HHOOK,
     active: Arc<Mutex<bool>>,
     sender: Sender<KeyEvent>,
+    has_input: Arc<Mutex<bool>>, // 添加这个字段
 }
 
 #[derive(Debug, Clone)]
@@ -19,22 +20,31 @@ pub struct KeyEvent {
     pub is_key_down: bool,
 }
 
+// 全局变量
+static mut GLOBAL_SENDER: Option<Sender<KeyEvent>> = None;
+static mut GLOBAL_ACTIVE: Option<Arc<Mutex<bool>>> = None;
+static mut GLOBAL_HAS_INPUT: Option<Arc<Mutex<bool>>> = None;
+static mut INJECTING_TEXT: bool = false; // 新增：标记是否正在注入文本
+
 impl GlobalHook {
+    // 修改 new 方法
     pub fn new() -> (Self, Receiver<KeyEvent>) {
         let (sender, receiver) = channel();
         let hook = GlobalHook {
             hook: std::ptr::null_mut(),
             active: Arc::new(Mutex::new(false)),
             sender,
+            has_input: Arc::new(Mutex::new(false)),
         };
         (hook, receiver)
     }
     
+    // 修改 install 方法
     pub fn install(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
-            // 设置全局变量供回调函数使用
             GLOBAL_SENDER = Some(self.sender.clone());
             GLOBAL_ACTIVE = Some(self.active.clone());
+            GLOBAL_HAS_INPUT = Some(self.has_input.clone());
             
             self.hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
@@ -68,12 +78,17 @@ impl GlobalHook {
     pub fn is_active(&self) -> bool {
         *self.active.lock().unwrap_or_else(|_| panic!("Failed to lock mutex"))
     }
+    
+    // 添加 set_has_input 方法到 impl 块中
+    pub fn set_has_input(&self, has_input: bool) {
+        if let Ok(mut state) = self.has_input.lock() {
+            *state = has_input;
+        }
+    }
 }
 
 // 全局变量（用于回调函数）
-static mut GLOBAL_SENDER: Option<Sender<KeyEvent>> = None;
-static mut GLOBAL_ACTIVE: Option<Arc<Mutex<bool>>> = None;
-
+// 修改键盘处理函数
 unsafe extern "system" fn keyboard_proc(
     n_code: i32,
     w_param: WPARAM,
@@ -82,6 +97,11 @@ unsafe extern "system" fn keyboard_proc(
     if n_code >= 0 {
         let kb_struct = *(l_param as *const KBDLLHOOKSTRUCT);
         let is_key_down = w_param == WM_KEYDOWN as WPARAM || w_param == WM_SYSKEYDOWN as WPARAM;
+        
+        // 如果正在注入文本，不要拦截任何按键
+        if INJECTING_TEXT {
+            return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
+        }
         
         // F4 键切换输入法状态
         if kb_struct.vkCode == VK_F4 as u32 && is_key_down {
@@ -103,9 +123,74 @@ unsafe extern "system" fn keyboard_proc(
         
         if is_active {
             println!("输入法已激活，检查按键: vk_code={}", kb_struct.vkCode);
-            // 只处理字母键
-            if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A { // A-Z
+            
+            // 处理字母键 A-Z
+            if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A {
                 println!("发送字母键事件: {}", kb_struct.vkCode);
+                if let Some(ref sender) = GLOBAL_SENDER {
+                    let event = KeyEvent {
+                        vk_code: kb_struct.vkCode,
+                        scan_code: kb_struct.scanCode,
+                        flags: kb_struct.flags,
+                        is_key_down,
+                    };
+                    if let Err(e) = sender.send(event) {
+                        println!("发送事件失败: {:?}", e);
+                    }
+                }
+                return 1; // 阻止按键传递给应用程序
+            }
+            // 处理数字键 1-9
+            else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 {
+                println!("发送数字键事件: {}", kb_struct.vkCode);
+                if let Some(ref sender) = GLOBAL_SENDER {
+                    let event = KeyEvent {
+                        vk_code: kb_struct.vkCode,
+                        scan_code: kb_struct.scanCode,
+                        flags: kb_struct.flags,
+                        is_key_down,
+                    };
+                    if let Err(e) = sender.send(event) {
+                        println!("发送事件失败: {:?}", e);
+                    }
+                }
+                return 1; // 阻止按键传递给应用程序
+            }
+            // 处理退格键
+            else if kb_struct.vkCode == VK_BACK as u32 {
+                println!("发送退格键事件");
+                if let Some(ref sender) = GLOBAL_SENDER {
+                    let event = KeyEvent {
+                        vk_code: kb_struct.vkCode,
+                        scan_code: kb_struct.scanCode,
+                        flags: kb_struct.flags,
+                        is_key_down,
+                    };
+                    if let Err(e) = sender.send(event) {
+                        println!("发送事件失败: {:?}", e);
+                    }
+                }
+                return 1; // 阻止按键传递给应用程序
+            }
+            // 处理空格键
+            else if kb_struct.vkCode == VK_SPACE as u32 {
+                println!("发送空格键事件");
+                if let Some(ref sender) = GLOBAL_SENDER {
+                    let event = KeyEvent {
+                        vk_code: kb_struct.vkCode,
+                        scan_code: kb_struct.scanCode,
+                        flags: kb_struct.flags,
+                        is_key_down,
+                    };
+                    if let Err(e) = sender.send(event) {
+                        println!("发送事件失败: {:?}", e);
+                    }
+                }
+                return 1; // 阻止按键传递给应用程序
+            }
+            // 处理ESC键
+            else if kb_struct.vkCode == VK_ESCAPE as u32 {
+                println!("发送ESC键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -123,4 +208,11 @@ unsafe extern "system" fn keyboard_proc(
     }
     
     CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param)
+}
+
+// 添加设置注入状态的函数
+pub fn set_injecting_text(injecting: bool) {
+    unsafe {
+        INJECTING_TEXT = injecting;
+    }
 }

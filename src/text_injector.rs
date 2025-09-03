@@ -2,6 +2,8 @@ use winapi::um::winuser::*;
 use winapi::shared::minwindef::*;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
+use std::thread;
+use std::time::Duration;
 
 pub struct TextInjector;
 
@@ -11,7 +13,7 @@ impl TextInjector {
     }
     
     pub fn inject_text(&self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // 方法1：使用剪贴板 + Ctrl+V（最简单可靠）
+        // 方法1：使用剪贴板 + SendInput发送Ctrl+V（更可靠）
         self.inject_via_clipboard(text)
     }
     
@@ -50,7 +52,10 @@ impl TextInjector {
             SetClipboardData(CF_UNICODETEXT, h_mem);
             CloseClipboard();
             
-            // 发送 Ctrl+V
+            // 等待一小段时间确保剪贴板操作完成
+            thread::sleep(Duration::from_millis(10));
+            
+            // 使用 SendInput 发送 Ctrl+V
             self.send_ctrl_v();
         }
         
@@ -59,14 +64,48 @@ impl TextInjector {
     
     fn send_ctrl_v(&self) {
         unsafe {
+            let mut inputs = [INPUT {
+                type_: INPUT_KEYBOARD,
+                u: std::mem::zeroed(),
+            }; 4];
+            
             // 按下 Ctrl
-            keybd_event(VK_CONTROL as u8, 0, 0, 0);
+            *inputs[0].u.ki_mut() = KEYBDINPUT {
+                wVk: VK_CONTROL as u16,
+                wScan: 0,
+                dwFlags: 0,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            
             // 按下 V
-            keybd_event(0x56, 0, 0, 0); // V key
+            *inputs[1].u.ki_mut() = KEYBDINPUT {
+                wVk: 0x56, // V key
+                wScan: 0,
+                dwFlags: 0,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            
             // 释放 V
-            keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0);
+            *inputs[2].u.ki_mut() = KEYBDINPUT {
+                wVk: 0x56, // V key
+                wScan: 0,
+                dwFlags: KEYEVENTF_KEYUP,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            
             // 释放 Ctrl
-            keybd_event(VK_CONTROL as u8, 0, KEYEVENTF_KEYUP, 0);
+            *inputs[3].u.ki_mut() = KEYBDINPUT {
+                wVk: VK_CONTROL as u16,
+                wScan: 0,
+                dwFlags: KEYEVENTF_KEYUP,
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            
+            SendInput(4, inputs.as_mut_ptr(), std::mem::size_of::<INPUT>() as i32);
         }
     }
 }

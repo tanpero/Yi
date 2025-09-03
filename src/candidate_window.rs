@@ -131,6 +131,15 @@ impl CandidateWindow {
             ShowWindow(self.hwnd, SW_HIDE);
         }
     }
+    
+    // 添加获取候选词数量的方法
+    pub fn get_candidates_count(&self) -> usize {
+        if let Ok(candidates) = self.candidates.lock() {
+            candidates.len()
+        } else {
+            0
+        }
+    }
 }
 
 unsafe extern "system" fn window_proc(

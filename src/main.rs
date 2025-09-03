@@ -96,38 +96,70 @@ impl GlobalIME {
             return Ok(());
         }
         
-        // 将虚拟键码转换为字符
-        let ch = (event.vk_code as u8 as char).to_lowercase().next().unwrap_or('\0');
-        println!("转换的字符: '{}'", ch);
-        
-        if ch >= 'a' && ch <= 'z' {
-            self.input_buffer.push(ch);
-            println!("当前输入缓冲区: '{}'", self.input_buffer);
-            self.update_candidates();
-        } else if event.vk_code >= 0x31 && event.vk_code <= 0x39 { // 数字键1-9
-            let number = (event.vk_code - 0x30) as usize;
-            if let Some(selected) = self.candidate_window.select_by_number(number) {
-                self.commit_text(&selected)?;
-            }
-        } else if event.vk_code == VK_SPACE as u32 {
-            // 空格键提交第一个候选
-            if let Some(selected) = self.candidate_window.get_selected_candidate() {
-                self.commit_text(&selected)?;
-            }
-        } else if event.vk_code == VK_BACK as u32 {
-            // 退格键
+        // 处理退格键
+        if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
                 self.input_buffer.pop();
+                println!("退格后输入缓冲区: '{}'", self.input_buffer);
+                
                 if self.input_buffer.is_empty() {
                     self.candidate_window.hide();
+                    println!("输入缓冲区已清空，隐藏候选窗口");
                 } else {
                     self.update_candidates();
                 }
             }
-        } else if event.vk_code == VK_ESCAPE as u32 {
-            // ESC键取消输入
+            return Ok(());
+        }
+        
+        // 处理数字键1-9选择候选词
+        if event.vk_code >= 0x31 && event.vk_code <= 0x39 {
+            let number = (event.vk_code - 0x30) as usize;
+            println!("按下数字键: {}", number);
+            
+            // 使用新的公共方法获取候选词数量
+            let candidates_count = self.candidate_window.get_candidates_count();
+            
+            if number <= candidates_count {
+                if let Some(selected) = self.candidate_window.select_by_number(number) {
+                    println!("选中候选词: {}", selected);
+                    self.commit_text(&selected)?;
+                    return Ok(());
+                }
+            } else {
+                println!("数字键 {} 超出候选词数量 {}，忽略", number, candidates_count);
+            }
+            return Ok(());
+        }
+        
+        // 处理字母键
+        if event.vk_code >= 0x41 && event.vk_code <= 0x5A {
+            let ch = (event.vk_code as u8 as char).to_lowercase().next().unwrap_or('\0');
+            println!("转换的字符: '{}'", ch);
+            
+            if ch >= 'a' && ch <= 'z' {
+                self.input_buffer.push(ch);
+                println!("当前输入缓冲区: '{}'", self.input_buffer);
+                self.update_candidates();
+            }
+            return Ok(());
+        }
+        
+        // 处理空格键
+        if event.vk_code == VK_SPACE as u32 {
+            if let Some(selected) = self.candidate_window.get_selected_candidate() {
+                println!("空格键选中第一个候选词: {}", selected);
+                self.commit_text(&selected)?;
+            }
+            return Ok(());
+        }
+        
+        // 处理ESC键
+        if event.vk_code == VK_ESCAPE as u32 {
+            println!("ESC键取消输入");
             self.input_buffer.clear();
             self.candidate_window.hide();
+            return Ok(());
         }
         
         Ok(())
@@ -157,17 +189,28 @@ impl GlobalIME {
     }
     
     fn commit_text(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // 提取彝文部分（去掉拼音标注）
+        println!("提交文本: {}", text);
+        
+        // 提取实际的彝文文本（去掉括号中的拼音部分）
         let yi_text = if let Some(pos) = text.find(" (") {
             &text[..pos]
         } else {
             text
         };
         
-        // 注入文本
+        // 设置正在注入文本的标志，避免拦截我们自己发送的按键
+        crate::global_hook::set_injecting_text(true);
+        
+        // 使用文本注入器将文本插入到当前应用程序
         self.text_injector.inject_text(yi_text)?;
         
-        // 清理状态
+        // 等待一小段时间确保文本注入完成
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        
+        // 重置注入标志
+        crate::global_hook::set_injecting_text(false);
+        
+        // 清空输入缓冲区并隐藏候选窗口
         self.input_buffer.clear();
         self.candidate_window.hide();
         
