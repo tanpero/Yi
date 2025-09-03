@@ -57,6 +57,15 @@ impl TextInjector {
             
             // 使用 SendInput 发送 Ctrl+V
             self.send_ctrl_v();
+            
+            // 等待文本输入完成
+            thread::sleep(Duration::from_millis(50));
+            
+            // 清除剪贴板内容
+            if OpenClipboard(std::ptr::null_mut()) != 0 {
+                EmptyClipboard();
+                CloseClipboard();
+            }
         }
         
         Ok(())

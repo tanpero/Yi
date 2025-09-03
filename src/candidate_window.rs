@@ -103,6 +103,30 @@ impl CandidateWindow {
                 );
             }
         }
+        
+        if !self.candidates.lock().unwrap().is_empty() {
+            unsafe {
+                ShowWindow(self.hwnd, SW_SHOW);
+                InvalidateRect(self.hwnd, ptr::null(), 1);
+                UpdateWindow(self.hwnd);
+                
+                let mut cursor_pos = POINT { x: 0, y: 0 };
+                GetCursorPos(&mut cursor_pos);
+                
+                // 根据候选词数量调整窗口高度
+                let candidate_count = self.candidates.lock().unwrap().len();
+                let window_height = 30 + candidate_count * 22; // 为更大字体调整高度
+                
+                SetWindowPos(
+                    self.hwnd,
+                    HWND_TOPMOST,
+                    cursor_pos.x,
+                    cursor_pos.y + 20,
+                    300, window_height as i32,
+                    SWP_SHOWWINDOW
+                );
+            }
+        }
     }
     
     // 添加缺失的 select_by_number 方法
@@ -160,6 +184,27 @@ unsafe extern "system" fn window_proc(
             };
             let hdc = BeginPaint(hwnd, &mut ps);
             
+            // 创建等线字体，14pt
+            let font_name = to_wide_string("等线");
+            let font = CreateFontW(
+                -18, // 14pt ≈ 18 pixels
+                0,
+                0,
+                0,
+                FW_NORMAL,
+                0,
+                0,
+                0,
+                DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY,
+                DEFAULT_PITCH | FF_DONTCARE,
+                font_name.as_ptr()
+            );
+            
+            let old_font = SelectObject(hdc, font as *mut _);
+            
             // 绘制实际的候选词
             if let Some(ref candidates_arc) = GLOBAL_CANDIDATES {
                 if let Ok(candidates) = candidates_arc.lock() {
@@ -168,10 +213,14 @@ unsafe extern "system" fn window_proc(
                         let display_text = format!("{}. {}", i + 1, candidate);
                         let text = to_wide_string(&display_text);
                         TextOutW(hdc, 10, y, text.as_ptr(), text.len() as i32 - 1);
-                        y += 20;
+                        y += 22; // 增加行间距以适应更大的字体
                     }
                 }
             }
+            
+            // 恢复原字体并删除创建的字体
+            SelectObject(hdc, old_font);
+            DeleteObject(font as *mut _);
             
             EndPaint(hwnd, &ps);
             0

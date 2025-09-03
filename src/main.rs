@@ -96,6 +96,15 @@ impl GlobalIME {
             return Ok(());
         }
         
+        // 如果输入缓冲区为空，让数字键和退格键正常工作
+        if self.input_buffer.is_empty() {
+            // 对于数字键1-9和退格键，不拦截，让系统处理
+            if (event.vk_code >= 0x31 && event.vk_code <= 0x39) || event.vk_code == VK_BACK as u32 {
+                // 返回Ok但不处理，让按键传递给系统
+                return Ok(());
+            }
+        }
+        
         // 处理退格键
         if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
@@ -114,20 +123,22 @@ impl GlobalIME {
         
         // 处理数字键1-9选择候选词
         if event.vk_code >= 0x31 && event.vk_code <= 0x39 {
-            let number = (event.vk_code - 0x30) as usize;
-            println!("按下数字键: {}", number);
-            
-            // 使用新的公共方法获取候选词数量
-            let candidates_count = self.candidate_window.get_candidates_count();
-            
-            if number <= candidates_count {
-                if let Some(selected) = self.candidate_window.select_by_number(number) {
-                    println!("选中候选词: {}", selected);
-                    self.commit_text(&selected)?;
-                    return Ok(());
+            // 只有在有输入缓冲区内容时才处理数字键选择
+            if !self.input_buffer.is_empty() {
+                let number = (event.vk_code - 0x30) as usize;
+                println!("按下数字键: {}", number);
+                
+                let candidates_count = self.candidate_window.get_candidates_count();
+                
+                if number <= candidates_count {
+                    if let Some(selected) = self.candidate_window.select_by_number(number) {
+                        println!("选中候选词: {}", selected);
+                        self.commit_text(&selected)?;
+                        return Ok(());
+                    }
+                } else {
+                    println!("数字键 {} 超出候选词数量 {}，忽略", number, candidates_count);
                 }
-            } else {
-                println!("数字键 {} 超出候选词数量 {}，忽略", number, candidates_count);
             }
             return Ok(());
         }
@@ -236,11 +247,22 @@ impl GlobalIME {
     fn commit_text(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
         println!("提交文本: {}", text);
         
-        // 提取实际的彝文文本（去掉括号中的拼音部分）
+        // 提取实际的彝文文本（去掉括号中的拼音部分和[部首]标记）
         let yi_text = if let Some(pos) = text.find(" (") {
-            &text[..pos]
+            let base_text = &text[..pos];
+            // 如果包含[部首]标记，去除它
+            if base_text.starts_with("[部首] ") {
+                &base_text[7..] // 去掉"[部首] "前缀（7个字节）
+            } else {
+                base_text
+            }
         } else {
-            text
+            // 处理没有括号的情况，也可能包含[部首]标记
+            if text.starts_with("[部首] ") {
+                &text[7..]
+            } else {
+                text
+            }
         };
         
         // 设置正在注入文本的标志，避免拦截 ourselves发送的按键
