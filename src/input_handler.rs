@@ -34,6 +34,7 @@ impl InputHandler {
         crate::global_hook::set_input_buffer_empty(self.input_buffer.is_empty());
         
         // 处理退格键
+        // 处理退格键
         if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
                 self.input_buffer.pop();
@@ -46,8 +47,10 @@ impl InputHandler {
                     candidate_window.hide();
                     println!("输入缓冲区已清空，隐藏候选窗口");
                 } else {
-                    // 需要在外部调用 update_candidates
-                    return Ok(true); // 返回 true 表示需要更新候选词
+                    // 立即更新输入框显示，无论是否有候选词
+                    candidate_window.show_candidates(vec![], &self.input_buffer);
+                    // 返回 true 让主循环更新候选词（基于最后一次合法音节序列）
+                    return Ok(true);
                 }
             }
             return Ok(false);

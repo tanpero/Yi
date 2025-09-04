@@ -11,26 +11,16 @@ impl CandidateManager {
         Self { yi_engine }
     }
     
-    pub fn update_candidates(
-        &self, 
-        input_buffer: &str, 
-        candidate_window: &mut CandidateWindow
-    ) {
+    pub fn update_candidates(&mut self, input_buffer: &str, candidate_window: &mut CandidateWindow) {
         if input_buffer.is_empty() {
             candidate_window.hide();
             return;
         }
         
-        // 特殊处理：如果只输入了一个 w
-        if input_buffer == "w" {
-            let mut candidates = vec!["ꀕ (w)".to_string()];
-            candidate_window.show_candidates(candidates, input_buffer);
-            return;
-        }
-        
-        // 检查输入是否合法（能形成有效的音节组合）
+        // 始终显示输入框，即使没有候选词
         if !self.is_valid_input_sequence(input_buffer) {
-            // 如果输入不合法，保持当前候选项不变，不更新
+            // 输入序列不合法时，显示输入框但不显示候选词
+            candidate_window.show_candidates(vec![], input_buffer);
             return;
         }
         
@@ -86,7 +76,8 @@ impl CandidateManager {
         if !candidates.is_empty() {
             candidate_window.show_candidates(candidates, input_buffer);
         } else {
-            candidate_window.hide();
+            // 即使没有候选词，也要显示输入框
+            candidate_window.show_candidates(vec![], input_buffer);
         }
     }
     

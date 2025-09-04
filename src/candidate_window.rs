@@ -52,8 +52,12 @@ impl CandidateWindow {
                 hInstance: GetModuleHandleW(ptr::null()),
                 hIcon: ptr::null_mut(),
                 hCursor: LoadCursorW(ptr::null_mut(), IDC_ARROW),
-                // 设置为黑色背景以支持毛玻璃效果
-                hbrBackground: GetStockObject(BLACK_BRUSH as i32) as HBRUSH,
+                // 根据主题模式设置背景
+                hbrBackground: if is_dark_mode {
+                    GetStockObject(BLACK_BRUSH as i32) as HBRUSH // 深色模式用黑色背景支持毛玻璃
+                } else {
+                    GetStockObject(WHITE_BRUSH as i32) as HBRUSH // 浅色模式用白色背景
+                },
                 lpszMenuName: ptr::null(),
                 lpszClassName: class_name.as_ptr(),
                 hIconSm: ptr::null_mut(),
@@ -121,7 +125,9 @@ impl CandidateWindow {
                 // 根据候选词数量调整窗口高度，为输入框预留空间
                 let candidate_count = self.candidates.lock().unwrap().len();
                 let input_box_height = 30; // 输入框高度
-                let window_height = input_box_height + 10 + candidate_count * 22; // 总高度
+                let line_height = 25; // 增加行高以适应更大的彝文字符
+                let bottom_margin = 15; // 底部额外空白
+                let window_height = input_box_height + 10 + candidate_count * line_height + bottom_margin;
                 
                 SetWindowPos(
                     self.hwnd,
@@ -260,40 +266,77 @@ fn detect_dark_mode() -> bool {
 
 // 添加启用毛玻璃效果的函数
 unsafe fn enable_blur_behind(hwnd: HWND, is_dark_mode: bool) -> Result<(), Box<dyn std::error::Error>> {
-    // 检查DWM是否可用
-    let mut composition_enabled: BOOL = 0;
-    let hr = DwmIsCompositionEnabled(&mut composition_enabled);
-    if FAILED(hr) || composition_enabled == 0 {
-        return Err("DWM组合未启用".into());
-    }
-    
-    // 启用模糊背景效果
-    let bb = DWM_BLURBEHIND {
-        dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
-        fEnable: 1, // 启用模糊
-        hRgnBlur: ptr::null_mut(), // 整个窗口模糊
-        fTransitionOnMaximized: 0,
-    };
-    
-    let hr = DwmEnableBlurBehindWindow(hwnd, &bb);
-    if FAILED(hr) {
-        return Err("启用毛玻璃效果失败".into());
-    }
-    
-    // 设置窗口属性以获得更好的效果
-    let attribute = DWMWA_NCRENDERING_ENABLED;
-    let mut enabled: BOOL = 1;
-    DwmSetWindowAttribute(
-        hwnd,
-        attribute,
-        &mut enabled as *mut _ as *mut _,
-        std::mem::size_of::<BOOL>() as u32,
-    );
-    
-    // 根据主题模式设置不同的窗口属性
     if is_dark_mode {
+        // 深色模式：保持现有的毛玻璃效果逻辑
+        // 检查DWM是否可用
+        let mut composition_enabled: BOOL = 0;
+        let hr = DwmIsCompositionEnabled(&mut composition_enabled);
+        if FAILED(hr) || composition_enabled == 0 {
+            return Err("DWM组合未启用".into());
+        }
+        
+        // 启用模糊背景效果
+        let bb = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable: 1, // 启用模糊
+            hRgnBlur: ptr::null_mut(), // 整个窗口模糊
+            fTransitionOnMaximized: 0,
+        };
+        
+        let hr = DwmEnableBlurBehindWindow(hwnd, &bb);
+        if FAILED(hr) {
+            return Err("启用毛玻璃效果失败".into());
+        }
+        
+        // 设置窗口属性以获得更好的效果
+        let attribute = DWMWA_NCRENDERING_ENABLED;
+        let mut enabled: BOOL = 1;
+        DwmSetWindowAttribute(
+            hwnd,
+            attribute,
+            &mut enabled as *mut _ as *mut _,
+            std::mem::size_of::<BOOL>() as u32,
+        );
+        
         // 深色模式设置
         let dark_mode: BOOL = 1;
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            &dark_mode as *const _ as *const _,
+            std::mem::size_of::<BOOL>() as u32,
+        );
+        
+        // 添加窗口透明度设置，让背景更不透明
+        SetLayeredWindowAttributes(
+            hwnd,
+            0, // 不使用颜色键
+            230, // Alpha值：0-255，230表示约90%不透明度
+            LWA_ALPHA
+        );
+    } else {
+        // 浅色模式：不使用毛玻璃效果，设置完全不透明的白色背景
+        
+        // 禁用模糊背景效果
+        let bb = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE,
+            fEnable: 0, // 禁用模糊
+            hRgnBlur: ptr::null_mut(),
+            fTransitionOnMaximized: 0,
+        };
+        
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        
+        // 设置完全不透明
+        SetLayeredWindowAttributes(
+            hwnd,
+            0, // 不使用颜色键
+            255, // Alpha值：255表示完全不透明
+            LWA_ALPHA
+        );
+        
+        // 确保浅色模式不使用深色主题
+        let dark_mode: BOOL = 0;
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -346,21 +389,28 @@ unsafe extern "system" fn window_proc(
             };
             let hdc = BeginPaint(hwnd, &mut ps);
             
-            // 设置透明背景以支持毛玻璃效果
-            SetBkMode(hdc, TRANSPARENT as i32);
+            // 根据主题模式设置背景模式
+            if GLOBAL_DARK_MODE {
+                // 深色模式：设置透明背景以支持毛玻璃效果
+                SetBkMode(hdc, TRANSPARENT as i32);
+            } else {
+                // 浅色模式：设置不透明白色背景
+                SetBkMode(hdc, OPAQUE as i32);
+                SetBkColor(hdc, RGB(255, 255, 255)); // 白色背景
+            }
             
             // 根据主题模式选择颜色
             let (input_bg_color, text_color, border_color) = if GLOBAL_DARK_MODE {
-                // 深色模式：半透明深色背景，白色文字，深色边框
-                (RGB(20, 20, 20), RGB(255, 255, 255), RGB(60, 60, 60))
+                // 深色模式：几乎不透明的深色背景
+                (RGB(5, 5, 5), RGB(255, 255, 255), RGB(30, 30, 30))
             } else {
-                // 浅色模式：半透明浅色背景，深色文字，浅色边框
-                (RGB(250, 250, 250), RGB(0, 0, 0), RGB(220, 220, 220))
+                // 浅色模式：白色背景，深色文字
+                (RGB(255, 255, 255), RGB(0, 0, 0), RGB(200, 200, 200))
             };
             
-            // 创建等线字体，14pt
+            // 创建两种字体：14pt用于普通字符，16pt用于彝文字符
             let font_name = to_wide_string("等线");
-            let font = CreateFontW(
+            let normal_font = CreateFontW(
                 -18, // 14pt ≈ 18 pixels
                 0, 0, 0,
                 FW_NORMAL,
@@ -368,12 +418,25 @@ unsafe extern "system" fn window_proc(
                 DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS,
                 CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY, // 使用更好的字体渲染质量
+                CLEARTYPE_QUALITY,
                 DEFAULT_PITCH | FF_DONTCARE,
                 font_name.as_ptr()
             );
             
-            let old_font = SelectObject(hdc, font as *mut _);
+            let yi_font = CreateFontW(
+                -21, // 16pt ≈ 21 pixels
+                0, 0, 0,
+                FW_NORMAL,
+                0, 0, 0,
+                DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                CLEARTYPE_QUALITY,
+                DEFAULT_PITCH | FF_DONTCARE,
+                font_name.as_ptr()
+            );
+            
+            let old_font = SelectObject(hdc, normal_font as *mut _);
             
             let mut y = 10;
             
@@ -409,32 +472,71 @@ unsafe extern "system" fn window_proc(
             // 设置文字颜色
             SetTextColor(hdc, text_color);
             
-            // 绘制当前输入的字母序列
+            // 绘制当前输入的字母序列（使用普通字体）
             if let Some(ref input_arc) = GLOBAL_INPUT {
                 if let Ok(input) = input_arc.lock() {
-                    let input_display = format!("输入: {}", input.as_str());
+                    let input_display = format!("👉 {}", input.as_str());
                     let input_text = to_wide_string(&input_display);
+                    SelectObject(hdc, normal_font as *mut _);
                     TextOutW(hdc, 10, 10, input_text.as_ptr(), input_text.len() as i32 - 1);
                 }
             }
             
             y = 40; // 候选词从输入框下方开始
             
-            // 绘制候选词
+            // 绘制候选词（混合字体大小）
             if let Some(ref candidates_arc) = GLOBAL_CANDIDATES {
                 if let Ok(candidates) = candidates_arc.lock() {
                     for (i, candidate) in candidates.iter().enumerate() {
-                        let display_text = format!("{}. {}", i + 1, candidate);
-                        let text = to_wide_string(&display_text);
-                        TextOutW(hdc, 10, y, text.as_ptr(), text.len() as i32 - 1);
-                        y += 22;
+                        let prefix = format!("{}. ", i + 1);
+                        let mut x = 10;
+                        
+                        // 先绘制序号（使用普通字体）
+                        SelectObject(hdc, normal_font as *mut _);
+                        let prefix_text = to_wide_string(&prefix);
+                        TextOutW(hdc, x, y, prefix_text.as_ptr(), prefix_text.len() as i32 - 1);
+                        
+                        // 计算序号的宽度
+                        let mut size = SIZE { cx: 0, cy: 0 };
+                        GetTextExtentPoint32W(hdc, prefix_text.as_ptr(), prefix_text.len() as i32 - 1, &mut size);
+                        x += size.cx;
+                        
+                        // 逐字符绘制候选词内容
+                        for ch in candidate.chars() {
+                            let code = ch as u32;
+                            // 检查是否为彝文字符（Unicode范围：U+A000-U+A48F 彝文音节, U+A490-U+A4CF 彝文部首）
+                            let is_yi_char = (code >= 0xA000 && code <= 0xA48F) || (code >= 0xA490 && code <= 0xA4CF);
+                            
+                            // 根据字符类型选择字体
+                            if is_yi_char {
+                                SelectObject(hdc, yi_font as *mut _);
+                            } else {
+                                SelectObject(hdc, normal_font as *mut _);
+                            }
+                            
+                            // 绘制单个字符
+                            let char_str = ch.to_string();
+                            let char_text = to_wide_string(&char_str);
+                            TextOutW(hdc, x, y, char_text.as_ptr(), char_text.len() as i32 - 1);
+                            
+                            // 计算字符宽度并更新x位置
+                            let mut char_size = SIZE { cx: 0, cy: 0 };
+                            GetTextExtentPoint32W(hdc, char_text.as_ptr(), char_text.len() as i32 - 1, &mut char_size);
+                            x += char_size.cx;
+                        }
+                        
+                        y += 25; // 增加行间距以适应更大的彝文字符
                     }
                 }
             }
             
+            // 增加窗体下边界空白距离
+            y += 15; // 额外的底部空白
+            
             // 恢复原字体并删除创建的字体
             SelectObject(hdc, old_font);
-            DeleteObject(font as *mut _);
+            DeleteObject(normal_font as *mut _);
+            DeleteObject(yi_font as *mut _);
             
             EndPaint(hwnd, &ps);
             0

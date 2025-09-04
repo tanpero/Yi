@@ -1,7 +1,7 @@
 #include <windows.h>
 
 // 应用图标
-1 ICON "assets/favicon.png"
+1 ICON "assets/favicon.ico"
 
 // 版本信息
 VS_VERSION_INFO VERSIONINFO

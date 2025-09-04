@@ -100,7 +100,7 @@ impl TrayIcon {
             };
             
             // 设置提示文本
-            let tip = to_wide_string("彝文输入法 - 按F4激活");
+            let tip = to_wide_string("彝文输入法 - 按F4切换输入模式");
             for (i, &ch) in tip.iter().take(127).enumerate() {
                 nid.szTip[i] = ch;
             }
@@ -169,7 +169,7 @@ unsafe fn show_context_menu(hwnd: HWND) {
         ID_MENU_ABOUT => {
             MessageBoxW(
                 hwnd,
-                to_wide_string("彝文输入法 v0.2.0\n\n一个现代化的彝文输入法程序\n\n按F4激活/关闭输入彝文输入模式").as_ptr(),
+                to_wide_string("彝文输入法 1.0.0\n\n按F4激活/关闭输入彝文输入模式\n\nCamille Dolma © 2025").as_ptr(),
                 to_wide_string("关于 - 彝文输入法").as_ptr(),
                 MB_OK | MB_ICONINFORMATION
             );
