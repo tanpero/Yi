@@ -1,5 +1,10 @@
 fn main() {
     if cfg!(target_os = "windows") {
+        // 编译资源文件
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("assets/favicon.ico");
+        res.compile().unwrap();
+        
         // 编译C++代码
         cc::Build::new()
             .cpp(true)
@@ -22,5 +27,7 @@ fn main() {
         println!("cargo:rerun-if-changed=cpp-tsf/src/tsf_service.cpp");
         println!("cargo:rerun-if-changed=cpp-tsf/include/tsf_service.h");
         println!("cargo:rerun-if-changed=build.rs");
+        println!("cargo:rerun-if-changed=assets/favicon.png");
+        println!("cargo:rerun-if-changed=app.rc");
     }
 }

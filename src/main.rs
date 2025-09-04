@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod global_hook;
 mod candidate_window;
 mod text_injector;
@@ -6,7 +8,7 @@ mod input_handler;
 mod candidate_manager;
 mod text_committer;
 mod app_state;
-mod tsf_bridge;  // 添加TSF桥接模块
+mod tsf_bridge;
 
 use crate::global_hook::{GlobalHook, KeyEvent};
 use crate::candidate_window::CandidateWindow;
