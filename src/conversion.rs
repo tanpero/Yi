@@ -28,8 +28,8 @@ impl YiIME {
 
     /// 智能转换：输入拼音序列，输出所有可能的彝文组合（包含部首）
     pub fn smart_convert(&self, input: &str) -> Vec<(String, Vec<String>, f32)> {
-        // 直接检查输入末尾是否为w，进行特殊处理
-        if input.ends_with('w') {
+        // 检查输入末尾是否为w，进行特殊处理
+        if input.ends_with('w') && input.len() > 1 {
             let base_input = &input[..input.len()-1]; // 去掉末尾的w
             
             // 对去掉w的部分进行正常分词

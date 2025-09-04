@@ -7,6 +7,14 @@ use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use winapi::um::libloaderapi::*;
 use std::sync::{Arc, Mutex};
+// 添加DWM API相关导入
+use winapi::um::dwmapi::*;
+use winapi::shared::winerror::*;
+// 添加注册表API用于检测系统主题
+use winapi::um::winreg::*;
+use winapi::um::winnt::*;
+
+const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
 
 // 添加全局候选词存储
 static mut GLOBAL_CANDIDATES: Option<Arc<Mutex<Vec<String>>>> = None;
@@ -16,6 +24,7 @@ pub struct CandidateWindow {
     candidates: Arc<Mutex<Vec<String>>>,
     selected_index: usize,
     current_input: Arc<Mutex<String>>, // 添加当前输入的存储
+    is_dark_mode: bool, // 添加深色模式标识
 }
 
 impl CandidateWindow {
@@ -26,6 +35,9 @@ impl CandidateWindow {
             GLOBAL_CANDIDATES = Some(candidates.clone());
             GLOBAL_INPUT = Some(current_input.clone());
         }
+        
+        // 检测系统主题
+        let is_dark_mode = detect_dark_mode();
         
         // 创建窗口
         let hwnd = unsafe {
@@ -40,7 +52,8 @@ impl CandidateWindow {
                 hInstance: GetModuleHandleW(ptr::null()),
                 hIcon: ptr::null_mut(),
                 hCursor: LoadCursorW(ptr::null_mut(), IDC_ARROW),
-                hbrBackground: (COLOR_WINDOW + 1) as HBRUSH,
+                // 设置为黑色背景以支持毛玻璃效果
+                hbrBackground: GetStockObject(BLACK_BRUSH as i32) as HBRUSH,
                 lpszMenuName: ptr::null(),
                 lpszClassName: class_name.as_ptr(),
                 hIconSm: ptr::null_mut(),
@@ -50,10 +63,10 @@ impl CandidateWindow {
             
             // 创建窗口
             CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+                WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED, // 添加WS_EX_LAYERED
                 class_name.as_ptr(),
                 to_wide_string("候选词窗口").as_ptr(),
-                WS_POPUP | WS_BORDER,
+                WS_POPUP, // 移除WS_BORDER以获得更好的毛玻璃效果
                 0, 0, 300, 200,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -66,11 +79,17 @@ impl CandidateWindow {
             return Err("创建候选词窗口失败".into());
         }
         
+        // 启用毛玻璃效果
+        unsafe {
+            enable_blur_behind(hwnd, is_dark_mode)?;
+        }
+        
         let window = CandidateWindow {
             hwnd,
             candidates,
             selected_index: 0,
             current_input,
+            is_dark_mode,
         };
         Ok(window)
     }
@@ -197,8 +216,98 @@ impl CandidateWindow {
     }
 }
 
+// 检测系统是否为深色模式
+fn detect_dark_mode() -> bool {
+    unsafe {
+        let mut hkey: HKEY = ptr::null_mut();
+        let subkey = to_wide_string("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
+        
+        let result = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            0,
+            KEY_READ,
+            &mut hkey
+        );
+        
+        if result != ERROR_SUCCESS as i32 {
+            return false; // 默认浅色模式
+        }
+        
+        let value_name = to_wide_string("AppsUseLightTheme");
+        let mut data: DWORD = 0;
+        let mut data_size = std::mem::size_of::<DWORD>() as u32;
+        let mut value_type: DWORD = 0;
+        
+        let result = RegQueryValueExW(
+            hkey,
+            value_name.as_ptr(),
+            ptr::null_mut(),
+            &mut value_type,
+            &mut data as *mut _ as *mut u8,
+            &mut data_size
+        );
+        
+        RegCloseKey(hkey);
+        
+        if result == ERROR_SUCCESS as i32 && value_type == REG_DWORD {
+            data == 0 // 0表示深色模式，1表示浅色模式
+        } else {
+            false // 默认浅色模式
+        }
+    }
+}
+
+// 添加启用毛玻璃效果的函数
+unsafe fn enable_blur_behind(hwnd: HWND, is_dark_mode: bool) -> Result<(), Box<dyn std::error::Error>> {
+    // 检查DWM是否可用
+    let mut composition_enabled: BOOL = 0;
+    let hr = DwmIsCompositionEnabled(&mut composition_enabled);
+    if FAILED(hr) || composition_enabled == 0 {
+        return Err("DWM组合未启用".into());
+    }
+    
+    // 启用模糊背景效果
+    let bb = DWM_BLURBEHIND {
+        dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+        fEnable: 1, // 启用模糊
+        hRgnBlur: ptr::null_mut(), // 整个窗口模糊
+        fTransitionOnMaximized: 0,
+    };
+    
+    let hr = DwmEnableBlurBehindWindow(hwnd, &bb);
+    if FAILED(hr) {
+        return Err("启用毛玻璃效果失败".into());
+    }
+    
+    // 设置窗口属性以获得更好的效果
+    let attribute = DWMWA_NCRENDERING_ENABLED;
+    let mut enabled: BOOL = 1;
+    DwmSetWindowAttribute(
+        hwnd,
+        attribute,
+        &mut enabled as *mut _ as *mut _,
+        std::mem::size_of::<BOOL>() as u32,
+    );
+    
+    // 根据主题模式设置不同的窗口属性
+    if is_dark_mode {
+        // 深色模式设置
+        let dark_mode: BOOL = 1;
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            &dark_mode as *const _ as *const _,
+            std::mem::size_of::<BOOL>() as u32,
+        );
+    }
+    
+    Ok(())
+}
+
 // 添加全局输入存储
 static mut GLOBAL_INPUT: Option<Arc<Mutex<String>>> = None;
+static mut GLOBAL_DARK_MODE: bool = false;
 
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
@@ -207,6 +316,25 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM
 ) -> LRESULT {
     match msg {
+        WM_CREATE => {
+            // 在窗口创建时检测并存储主题模式
+            GLOBAL_DARK_MODE = detect_dark_mode();
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        WM_ACTIVATE => {
+            // 在窗口激活时重新检测主题并启用毛玻璃效果
+            let is_dark = detect_dark_mode();
+            GLOBAL_DARK_MODE = is_dark;
+            let _ = enable_blur_behind(hwnd, is_dark);
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        WM_SETTINGCHANGE => {
+            // 监听系统设置变化，重新检测主题
+            GLOBAL_DARK_MODE = detect_dark_mode();
+            let _ = enable_blur_behind(hwnd, GLOBAL_DARK_MODE);
+            InvalidateRect(hwnd, ptr::null(), 1); // 重绘窗口
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
         WM_PAINT => {
             let mut ps = PAINTSTRUCT {
                 hdc: ptr::null_mut(),
@@ -218,6 +346,18 @@ unsafe extern "system" fn window_proc(
             };
             let hdc = BeginPaint(hwnd, &mut ps);
             
+            // 设置透明背景以支持毛玻璃效果
+            SetBkMode(hdc, TRANSPARENT as i32);
+            
+            // 根据主题模式选择颜色
+            let (input_bg_color, text_color, border_color) = if GLOBAL_DARK_MODE {
+                // 深色模式：半透明深色背景，白色文字，深色边框
+                (RGB(20, 20, 20), RGB(255, 255, 255), RGB(60, 60, 60))
+            } else {
+                // 浅色模式：半透明浅色背景，深色文字，浅色边框
+                (RGB(250, 250, 250), RGB(0, 0, 0), RGB(220, 220, 220))
+            };
+            
             // 创建等线字体，14pt
             let font_name = to_wide_string("等线");
             let font = CreateFontW(
@@ -228,7 +368,7 @@ unsafe extern "system" fn window_proc(
                 DEFAULT_CHARSET,
                 OUT_DEFAULT_PRECIS,
                 CLIP_DEFAULT_PRECIS,
-                DEFAULT_QUALITY,
+                CLEARTYPE_QUALITY, // 使用更好的字体渲染质量
                 DEFAULT_PITCH | FF_DONTCARE,
                 font_name.as_ptr()
             );
@@ -237,7 +377,7 @@ unsafe extern "system" fn window_proc(
             
             let mut y = 10;
             
-            // 绘制输入框背景
+            // 绘制输入框背景 - 使用与窗体一致的半透明效果
             let input_rect = RECT {
                 left: 5,
                 top: 5,
@@ -245,24 +385,30 @@ unsafe extern "system" fn window_proc(
                 bottom: 30,
             };
             
-            // 设置输入框背景色（浅灰色）
-            let brush = CreateSolidBrush(RGB(240, 240, 240));
-            FillRect(hdc, &input_rect, brush);
+            // 创建半透明背景画刷，与毛玻璃效果协调
+            let brush = CreateSolidBrush(input_bg_color);
+            
+            // 使用更柔和的填充方式
+            let old_brush = SelectObject(hdc, brush as *mut _);
+            let pen = CreatePen(PS_SOLID as i32, 1, border_color);
+            let old_pen = SelectObject(hdc, pen as *mut _);
+            
+            // 绘制圆角矩形输入框（可选）
+            RoundRect(hdc, input_rect.left, input_rect.top, input_rect.right, input_rect.bottom, 6, 6);
+            
+            SelectObject(hdc, old_pen);
+            SelectObject(hdc, old_brush);
+            DeleteObject(pen as *mut _);
             DeleteObject(brush as *mut _);
             
-            // 绘制输入框边框
-            let pen = CreatePen(PS_SOLID as i32, 1, RGB(128, 128, 128));
-            let old_pen = SelectObject(hdc, pen as *mut _);
-            Rectangle(hdc, input_rect.left, input_rect.top, input_rect.right, input_rect.bottom);
-            SelectObject(hdc, old_pen);
-            DeleteObject(pen as *mut _);
+            // 设置文字颜色
+            SetTextColor(hdc, text_color);
             
             // 绘制当前输入的字母序列
             if let Some(ref input_arc) = GLOBAL_INPUT {
                 if let Ok(input) = input_arc.lock() {
                     let input_display = format!("输入: {}", input.as_str());
                     let input_text = to_wide_string(&input_display);
-                    SetTextColor(hdc, RGB(0, 0, 0));
                     TextOutW(hdc, 10, 10, input_text.as_ptr(), input_text.len() as i32 - 1);
                 }
             }
@@ -275,7 +421,6 @@ unsafe extern "system" fn window_proc(
                     for (i, candidate) in candidates.iter().enumerate() {
                         let display_text = format!("{}. {}", i + 1, candidate);
                         let text = to_wide_string(&display_text);
-                        SetTextColor(hdc, RGB(0, 0, 0));
                         TextOutW(hdc, 10, y, text.as_ptr(), text.len() as i32 - 1);
                         y += 22;
                     }

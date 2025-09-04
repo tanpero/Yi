@@ -32,7 +32,7 @@ impl CandidateManager {
         // 1. 检查是否为完整音节（优先级最高）
         if self.yi_engine.syllable_set.contains(input_buffer) {
             let results = self.yi_engine.query_by_pinyin(input_buffer);
-            for yi_char in results.iter().take(9) {
+            for yi_char in results.iter() {
                 candidates.push(format!("{} ({})", yi_char, input_buffer));
             }
         }
