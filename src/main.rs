@@ -6,6 +6,7 @@ mod input_handler;
 mod candidate_manager;
 mod text_committer;
 mod app_state;
+mod tsf_bridge;  // 添加TSF桥接模块
 
 use crate::global_hook::{GlobalHook, KeyEvent};
 use crate::candidate_window::CandidateWindow;

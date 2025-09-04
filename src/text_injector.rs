@@ -1,3 +1,4 @@
+use crate::tsf_bridge::TSFBridge;
 use winapi::um::winuser::*;
 use winapi::shared::minwindef::*;
 use std::ffi::OsStr;
@@ -5,18 +6,66 @@ use std::os::windows::ffi::OsStrExt;
 use std::thread;
 use std::time::Duration;
 
-pub struct TextInjector;
+pub struct TextInjector {
+    tsf_bridge: Option<TSFBridge>,
+    fallback_mode: bool,
+}
 
 impl TextInjector {
     pub fn new() -> Self {
-        TextInjector
+        // 尝试初始化TSF
+        let tsf_bridge = match TSFBridge::new() {
+            Ok(bridge) => {
+                println!("✓ TSF模式已启用");
+                Some(bridge)
+            },
+            Err(e) => {
+                println!("⚠ TSF初始化失败: {}，使用剪贴板回退模式", e);
+                None
+            }
+        };
+        
+        let fallback_mode = tsf_bridge.is_none();
+        
+        TextInjector {
+            tsf_bridge,
+            fallback_mode,
+        }
     }
     
     pub fn inject_text(&self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // 方法1：使用剪贴板 + SendInput发送Ctrl+V（更可靠）
-        self.inject_via_clipboard(text)
+        if let Some(ref tsf) = self.tsf_bridge {
+            // 优先使用TSF进行真正的文本插入
+            match tsf.insert_text(text) {
+                Ok(_) => {
+                    println!("✓ TSF文本插入成功: {}", text);
+                    Ok(())
+                },
+                Err(e) => {
+                    println!("⚠ TSF文本插入失败: {}，回退到剪贴板模式", e);
+                    self.inject_via_clipboard(text)
+                }
+            }
+        } else {
+            // 回退到剪贴板模式
+            println!("使用剪贴板模式插入文本: {}", text);
+            self.inject_via_clipboard(text)
+        }
     }
     
+    pub fn is_tsf_enabled(&self) -> bool {
+        self.tsf_bridge.is_some()
+    }
+    
+    pub fn get_mode_description(&self) -> &'static str {
+        if self.tsf_bridge.is_some() {
+            "TSF模式（真正的输入法接口）"
+        } else {
+            "剪贴板模式（Ctrl+V回退）"
+        }
+    }
+    
+    // 保留原有的剪贴板方法作为回退
     fn inject_via_clipboard(&self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
         use winapi::um::winuser::{OpenClipboard, EmptyClipboard, SetClipboardData, CloseClipboard};
         use winapi::um::winbase::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
@@ -28,40 +77,31 @@ impl TextInjector {
             .collect();
         
         unsafe {
-            // 打开剪贴板
             if OpenClipboard(std::ptr::null_mut()) == 0 {
                 return Err("Failed to open clipboard".into());
             }
             
-            // 清空剪贴板
             EmptyClipboard();
             
-            // 分配内存
             let h_mem = GlobalAlloc(GMEM_MOVEABLE, wide_text.len() * 2);
             if h_mem.is_null() {
                 CloseClipboard();
                 return Err("Failed to allocate memory".into());
             }
             
-            // 复制文本到内存
             let p_mem = GlobalLock(h_mem) as *mut u16;
             std::ptr::copy_nonoverlapping(wide_text.as_ptr(), p_mem, wide_text.len());
             GlobalUnlock(h_mem);
             
-            // 设置剪贴板数据
             SetClipboardData(CF_UNICODETEXT, h_mem);
             CloseClipboard();
             
-            // 等待一小段时间确保剪贴板操作完成
             thread::sleep(Duration::from_millis(10));
             
-            // 使用 SendInput 发送 Ctrl+V
             self.send_ctrl_v();
             
-            // 等待文本输入完成
             thread::sleep(Duration::from_millis(50));
             
-            // 清除剪贴板内容
             if OpenClipboard(std::ptr::null_mut()) != 0 {
                 EmptyClipboard();
                 CloseClipboard();
@@ -78,7 +118,6 @@ impl TextInjector {
                 u: std::mem::zeroed(),
             }; 4];
             
-            // 按下 Ctrl
             *inputs[0].u.ki_mut() = KEYBDINPUT {
                 wVk: VK_CONTROL as u16,
                 wScan: 0,
@@ -87,25 +126,22 @@ impl TextInjector {
                 dwExtraInfo: 0,
             };
             
-            // 按下 V
             *inputs[1].u.ki_mut() = KEYBDINPUT {
-                wVk: 0x56, // V key
+                wVk: 0x56,
                 wScan: 0,
                 dwFlags: 0,
                 time: 0,
                 dwExtraInfo: 0,
             };
             
-            // 释放 V
             *inputs[2].u.ki_mut() = KEYBDINPUT {
-                wVk: 0x56, // V key
+                wVk: 0x56,
                 wScan: 0,
                 dwFlags: KEYEVENTF_KEYUP,
                 time: 0,
                 dwExtraInfo: 0,
             };
             
-            // 释放 Ctrl
             *inputs[3].u.ki_mut() = KEYBDINPUT {
                 wVk: VK_CONTROL as u16,
                 wScan: 0,
