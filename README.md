@@ -5,7 +5,7 @@
 ## 演示
 
 
-<video src="./assets/video.mp4" width="320" height="480" controls></video>
+![演示](./assets/video.mp4)
 
 ## 特性
 
