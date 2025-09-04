@@ -21,6 +21,13 @@ impl CandidateManager {
             return;
         }
         
+        // 特殊处理：如果只输入了一个 w
+        if input_buffer == "w" {
+            let mut candidates = vec!["ꀕ (w)".to_string()];
+            candidate_window.show_candidates(candidates, input_buffer);
+            return;
+        }
+        
         // 检查输入是否合法（能形成有效的音节组合）
         if !self.is_valid_input_sequence(input_buffer) {
             // 如果输入不合法，保持当前候选项不变，不更新
@@ -32,32 +39,14 @@ impl CandidateManager {
         // 1. 检查是否为完整音节（优先级最高）
         if self.yi_engine.syllable_set.contains(input_buffer) {
             let results = self.yi_engine.query_by_pinyin(input_buffer);
-            for yi_char in results.iter() {
+            for yi_char in results.iter().take(9) {
                 candidates.push(format!("{} ({})", yi_char, input_buffer));
             }
         }
         // 2. 检查是否为声母或声母组合
         else if input_buffer.len() <= 3 && self.is_potential_consonant(input_buffer) {
-            // 收集声母联想结果
-            let mut consonant_results = Vec::new();
-            
-            for (pinyin, yi_chars) in &self.yi_engine.pinyin_index {
-                if pinyin.starts_with(input_buffer) {
-                    for yi_char in yi_chars {
-                        consonant_results.push((yi_char.clone(), pinyin.clone()));
-                    }
-                }
-            }
-            
-            // 添加部首候选
-            for (pinyin, radical) in &self.yi_engine.radical_pinyin_index {
-                if pinyin.starts_with(input_buffer) {
-                    consonant_results.push((radical.clone(), pinyin.clone()));
-                }
-            }
-            
-            consonant_results.sort();
-            consonant_results.dedup();
+            // 收集声母联想结果，优化排序
+            let consonant_results = self.get_sorted_consonant_results(input_buffer);
             
             for (yi_char, pinyin) in consonant_results.iter().take(9) {
                 candidates.push(format!("{} ({})", yi_char, pinyin));
@@ -82,7 +71,87 @@ impl CandidateManager {
         }
     }
     
+    /// 获取排序后的声母联想结果
+    fn get_sorted_consonant_results(&self, input_buffer: &str) -> Vec<(String, String)> {
+        let mut consonant_results = Vec::new();
+        let mut priority_results = Vec::new(); // 优先结果：声母本身的候选项
+        let mut other_results = Vec::new();    // 其他结果
+        
+        // 收集所有匹配的拼音和彝文字符
+        for (pinyin, yi_chars) in &self.yi_engine.pinyin_index {
+            if pinyin.starts_with(input_buffer) {
+                for yi_char in yi_chars {
+                    let result = (yi_char.clone(), pinyin.clone());
+                    
+                    // 判断是否为声母本身的候选项
+                    if self.is_consonant_itself_candidate(input_buffer, pinyin) {
+                        priority_results.push(result);
+                    } else {
+                        other_results.push(result);
+                    }
+                }
+            }
+        }
+        
+        // 添加部首候选
+        for (pinyin, radical) in &self.yi_engine.radical_pinyin_index {
+            if pinyin.starts_with(input_buffer) {
+                let result = (radical.clone(), pinyin.clone());
+                
+                if self.is_consonant_itself_candidate(input_buffer, pinyin) {
+                    priority_results.push(result);
+                } else {
+                    other_results.push(result);
+                }
+            }
+        }
+        
+        // 排序并去重
+        priority_results.sort();
+        priority_results.dedup();
+        other_results.sort();
+        other_results.dedup();
+        
+        // 合并结果：优先结果在前，其他结果在后
+        consonant_results.extend(priority_results);
+        consonant_results.extend(other_results);
+        
+        consonant_results
+    }
+    
+    /// 判断是否为声母本身的候选项
+    /// 例如：输入 h，hat、hax、ha、hap 等是声母本身的候选项
+    /// 而 hmat、hmax 等不是
+    fn is_consonant_itself_candidate(&self, consonant: &str, pinyin: &str) -> bool {
+        if consonant.len() == 1 {
+            // 单字母声母：检查拼音是否以该声母开头且第二个字符是元音
+            if let Some(second_char) = pinyin.chars().nth(1) {
+                matches!(second_char, 'a' | 'e' | 'i' | 'o' | 'u')
+            } else {
+                false
+            }
+        } else {
+            // 多字母声母：直接匹配
+            pinyin.starts_with(consonant)
+        }
+    }
+    
     fn is_valid_input_sequence(&self, input: &str) -> bool {
+        // 特殊处理：单个 w 总是有效的
+        if input == "w" {
+            return true;
+        }
+        
+        // 特殊处理：以 w 结尾的输入序列
+        if input.ends_with('w') && input.len() > 1 {
+            let base_input = &input[..input.len()-1];
+            // 检查去掉w后的部分是否能形成有效的分词
+            let segment_results = self.yi_engine.segment_pinyin(base_input);
+            if !segment_results.is_empty() {
+                return true;
+            }
+        }
+        
         // 1. 检查是否为完整音节
         if self.yi_engine.syllable_set.contains(input) {
             return true;
