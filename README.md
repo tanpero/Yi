@@ -4,7 +4,7 @@
 
 ## 演示
 
-<video src="./assets/video.mp4" autoplay></video>
+https://github.com/tanpero/Yi/raw/refs/tags/1.0.0/assets/video.mp4
 
 ## 特性
 
@@ -14,6 +14,9 @@
 - 适应系统深浅色主题，运行时位于系统托盘中，用 F4 键切换彝文输入与常规输入模式
 
 ## 构建
+
+<details>
+<summary>展开</summary>
 
 ### 系统要求
 
@@ -49,7 +52,10 @@
    cargo run --release
    ```
 
-### 预编译版本
+</details>
+
+
+## 预编译版本
 
 从 [Releases 页面](https://github.com/tanpero/yi/releases) 下载最新的预编译版本。
 
