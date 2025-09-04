@@ -377,11 +377,16 @@ unsafe extern "system" fn window_proc(
             
             let mut y = 10;
             
-            // 绘制输入框背景 - 使用与窗体一致的半透明效果
+            // 获取当前窗口宽度
+            let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            GetClientRect(hwnd, &mut rect);
+            let window_width = rect.right - rect.left;
+            
+            // 绘制输入框背景 - 使用动态宽度
             let input_rect = RECT {
                 left: 5,
                 top: 5,
-                right: 295,
+                right: window_width - 5, // 动态右边界
                 bottom: 30,
             };
             

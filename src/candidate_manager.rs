@@ -36,30 +36,49 @@ impl CandidateManager {
         
         let mut candidates = Vec::new();
         
-        // 1. 检查是否为完整音节（优先级最高）
-        if self.yi_engine.syllable_set.contains(input_buffer) {
+        // 1. 检查是否为完整音节
+        let is_complete_syllable = self.yi_engine.syllable_set.contains(input_buffer);
+        
+        if is_complete_syllable {
+            // 添加完整音节的直接匹配结果
             let results = self.yi_engine.query_by_pinyin(input_buffer);
-            for yi_char in results.iter().take(9) {
+            for yi_char in results.iter().take(3) { // 限制为前3个，为联想结果留空间
                 candidates.push(format!("{} ({})", yi_char, input_buffer));
             }
         }
-        // 2. 检查是否为声母或声母组合
-        else if input_buffer.len() <= 3 && self.is_potential_consonant(input_buffer) {
-            // 收集声母联想结果，优化排序
+        
+        // 2. 检查是否应该进行声母联想（包括完整音节的联想）
+        if input_buffer.len() <= 3 && self.is_potential_consonant(input_buffer) {
+            // 收集声母联想结果
             let consonant_results = self.get_sorted_consonant_results(input_buffer);
             
-            for (yi_char, pinyin) in consonant_results.iter().take(9) {
+            // 如果是完整音节，跳过与输入完全相同的结果，只添加联想结果
+            for (yi_char, pinyin) in consonant_results.iter() {
+                if candidates.len() >= 9 {
+                    break;
+                }
+                
+                // 如果是完整音节，跳过与输入相同的拼音
+                if is_complete_syllable && pinyin == input_buffer {
+                    continue;
+                }
+                
                 candidates.push(format!("{} ({})", yi_char, pinyin));
             }
         }
-        // 3. 默认进行智能转换
-        else {
+        
+        // 3. 如果还没有足够的候选项，进行智能转换
+        if candidates.len() < 9 && !is_complete_syllable {
             let results = self.yi_engine.smart_convert(input_buffer);
-            for (segmentation, yi_combinations, _confidence) in results.iter().take(9) {
-                for yi_text in yi_combinations.iter().take(3) {
-                    if candidates.len() < 9 {
-                        candidates.push(format!("{} ({})", yi_text, segmentation));
+            for (segmentation, yi_combinations, _confidence) in results.iter() {
+                for yi_text in yi_combinations.iter() {
+                    if candidates.len() >= 9 {
+                        break;
                     }
+                    candidates.push(format!("{} ({})", yi_text, segmentation));
+                }
+                if candidates.len() >= 9 {
+                    break;
                 }
             }
         }
