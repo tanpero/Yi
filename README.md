@@ -4,7 +4,8 @@
 
 ## 演示
 
-https://github.com/tanpero/Yi/raw/refs/tags/1.0.0/assets/video.mp4
+
+<video src="./assets/video.mp4" width="320" height="480" controls></video>
 
 ## 特性
 
