@@ -24,6 +24,9 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::Duration;
 use winapi::shared::windef::*;
+use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONERROR};
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 
 struct GlobalIME {
     hook: GlobalHook,
@@ -36,13 +39,17 @@ struct GlobalIME {
     key_receiver: Receiver<KeyEvent>,
 }
 
+// 在文件顶部添加嵌入的字典数据
+const YI_SYLLABLE_DICT: &str = include_str!("../assets/彝文音节字典.json");
+const YI_RADICAL_DICT: &str = include_str!("../assets/彝文部首字典.json");
+
 impl GlobalIME {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut yi_engine = YiIME::new();
         
-        // 加载字典
-        yi_engine.load_dictionary("assets/彝文音节字典.json")?;
-        yi_engine.load_radical_dictionary("assets/彝文部首字典.json")?;
+        // 使用嵌入的字典数据
+        yi_engine.load_dictionary_from_str(YI_SYLLABLE_DICT)?;
+        yi_engine.load_radical_dictionary_from_str(YI_RADICAL_DICT)?;
         
         let (mut hook, key_receiver) = GlobalHook::new();
         hook.install()?;
@@ -126,6 +133,19 @@ impl GlobalIME {
         );
         
         Ok(())
+    }
+}
+
+fn show_error_dialog(message: &str) {
+    unsafe {
+        let wide_msg: Vec<u16> = message.encode_utf16().chain(std::iter::once(0)).collect();
+        let wide_title: Vec<u16> = "彝文输入法启动错误".encode_utf16().chain(std::iter::once(0)).collect();
+        MessageBoxW(
+            std::ptr::null_mut(),
+            wide_msg.as_ptr(),
+            wide_title.as_ptr(),
+            MB_OK | MB_ICONERROR
+        );
     }
 }
 

@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::Path;
+
 fn main() {
     if cfg!(target_os = "windows") {
         // 编译资源文件
@@ -27,7 +30,9 @@ fn main() {
         println!("cargo:rerun-if-changed=cpp-tsf/src/tsf_service.cpp");
         println!("cargo:rerun-if-changed=cpp-tsf/include/tsf_service.h");
         println!("cargo:rerun-if-changed=build.rs");
-        println!("cargo:rerun-if-changed=assets/favicon.png");
+        println!("cargo:rerun-if-changed=assets/favicon.ico");
         println!("cargo:rerun-if-changed=app.rc");
+        println!("cargo:rerun-if-changed=assets/彝文音节字典.json");
+        println!("cargo:rerun-if-changed=assets/彝文部首字典.json");
     }
 }
