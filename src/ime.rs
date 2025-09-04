@@ -4,6 +4,7 @@ use std::fs;
 use std::error::Error;
 
 /// 彝文输入法核心结构
+#[derive(Debug, Clone)]
 pub struct YiIME {
     /// 字典：彝文字符 -> 拼音编码列表
     pub dictionary: HashMap<String, Vec<String>>,
