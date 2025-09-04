@@ -530,9 +530,6 @@ unsafe extern "system" fn window_proc(
                 }
             }
             
-            // 增加窗体下边界空白距离
-            y += 15; // 额外的底部空白
-            
             // 恢复原字体并删除创建的字体
             SelectObject(hdc, old_font);
             DeleteObject(normal_font as *mut _);
