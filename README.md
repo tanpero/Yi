@@ -5,7 +5,7 @@
 ## 演示
 
 
-![演示](./assets/video.mp4)
+![演示](https://raw.githubusercontent.com/tanpero/Yi/refs/heads/main/assets/video.mp4)
 
 ## 特性
 
@@ -77,4 +77,5 @@
 ## 作者
 
 [Camille Dolma](https://github.com/tanpero)
+
 
