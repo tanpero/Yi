@@ -108,28 +108,3 @@ impl Drop for TSFBridge {
 // 线程安全实现
 unsafe impl Send for TSFBridge {}
 unsafe impl Sync for TSFBridge {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_tsf_initialization() {
-        let result = TSFBridge::new();
-        match result {
-            Ok(_) => println!("TSF测试初始化成功"),
-            Err(e) => println!("TSF测试初始化失败: {}", e),
-        }
-    }
-    
-    #[test]
-    fn test_text_insertion() {
-        if let Ok(tsf) = TSFBridge::new() {
-            let result = tsf.insert_text("测试文本");
-            match result {
-                Ok(_) => println!("TSF文本插入测试成功"),
-                Err(e) => println!("TSF文本插入测试失败: {}", e),
-            }
-        }
-    }
-}

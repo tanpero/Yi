@@ -25,8 +25,6 @@ use std::thread;
 use std::time::Duration;
 use winapi::shared::windef::*;
 use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONERROR};
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 
 struct GlobalIME {
     hook: GlobalHook,
@@ -59,11 +57,19 @@ impl GlobalIME {
         
         let text_injector = TextInjector::new();
         let tray_icon = TrayIcon::new()?;
+        let app_state = AppState::new();
         
-        let input_handler = InputHandler::new(yi_engine.clone().into());
+        // 设置输入模式回调
+        tray_icon.set_input_mode_callback({
+            let app_state_clone = app_state.clone();
+            move |mode| {
+                app_state_clone.set_input_mode(mode);
+            }
+        });
+        
+        let input_handler = InputHandler::new(yi_engine.clone().into(), app_state.clone().into());
         let candidate_manager = CandidateManager::new(yi_engine.into());
         let text_committer = TextCommitter::new(text_injector);
-        let app_state = AppState::new();
         
         Ok(GlobalIME {
             hook,

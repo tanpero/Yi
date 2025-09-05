@@ -4,17 +4,20 @@ use crate::text_injector::TextInjector;
 use yi::YiIME;
 use winapi::um::winuser::*;
 use std::sync::Arc;
+use crate::app_state::{AppState, InputMode};
 
 pub struct InputHandler {
     input_buffer: String,
     yi_engine: Arc<YiIME>,
+    app_state: Arc<AppState>,
 }
 
 impl InputHandler {
-    pub fn new(yi_engine: Arc<YiIME>) -> Self {
+    pub fn new(yi_engine: Arc<YiIME>, app_state: Arc<AppState>) -> Self {
         Self {
             input_buffer: String::new(),
             yi_engine,
+            app_state,
         }
     }
     
@@ -217,6 +220,52 @@ impl InputHandler {
         crate::global_hook::set_input_buffer_empty(true);
     }
     
+    fn format_text_by_mode(&self, yi_text: &str, pinyin: &str) -> String {
+        let mode = self.app_state.get_input_mode();
+        
+        match mode {
+            InputMode::YiOnly => yi_text.to_string(),
+            InputMode::PinyinYi => {
+                // 拼音+彝文：先输入拼音（音节间用空格代替短横线），跟随一个空格，再跟随彝文
+                let formatted_pinyin = pinyin.replace("-", " ");
+                format!("{} {}", formatted_pinyin, yi_text)
+            },
+            InputMode::PinyinWithYi => {
+                // 拼音（彝文）：先输入拼音，小括号内有彝文
+                let formatted_pinyin = pinyin.replace("-", " ");
+                format!("{}（{}）", formatted_pinyin, yi_text)
+
+            },
+            InputMode::YiWithPinyin => {
+                // 彝文（拼音）：先输入彝文，小括号内有拼音
+                let formatted_pinyin = pinyin.replace("-", " ");
+                format!("{}（{}）", yi_text, formatted_pinyin)
+
+            },
+            InputMode::HtmlRuby => {
+                // HTML排版：每个彝文字符都用ruby标签包装
+                self.format_as_html_ruby(yi_text, pinyin)
+            },
+        }
+    }
+    
+    fn format_as_html_ruby(&self, yi_text: &str, pinyin: &str) -> String {
+        let yi_chars: Vec<char> = yi_text.chars().collect();
+        let pinyin_parts: Vec<&str> = pinyin.split('-').collect();
+        
+        let mut result = String::new();
+        
+        for (i, yi_char) in yi_chars.iter().enumerate() {
+            let corresponding_pinyin = pinyin_parts.get(i).unwrap_or(&"");
+            result.push_str(&format!(
+                "<ruby>{}<rp>(</rp><rt>{}</rt><rp>)</rp></ruby>",
+                yi_char, corresponding_pinyin
+            ));
+        }
+        
+        result
+    }
+    
     fn commit_text(
         &mut self, 
         text: &str,
@@ -225,14 +274,17 @@ impl InputHandler {
     ) -> Result<(), Box<dyn std::error::Error>> {
         println!("提交文本: {}", text);
         
-        // 提取实际的彝文文本（去掉括号中的拼音部分和[部首]标记）
-        let yi_text = self.extract_yi_text(text);
+        // 提取彝文文本和拼音
+        let (yi_text, pinyin) = self.extract_yi_and_pinyin(text);
+        
+        // 根据输入模式格式化文本
+        let formatted_text = self.format_text_by_mode(&yi_text, &pinyin);
         
         // 设置正在注入文本的标志，避免拦截 ourselves发送的按键
         crate::global_hook::set_injecting_text(true);
         
-        // 使用文本注入器将文本插入到当前应用程序
-        text_injector.inject_text(yi_text)?;
+        // 使用格式化后的文本进行注入
+        text_injector.inject_text(&formatted_text)?;
         
         // 等待一小段时间确保文本注入完成
         std::thread::sleep(std::time::Duration::from_millis(50));
@@ -251,26 +303,28 @@ impl InputHandler {
         Ok(())
     }
     
-    fn extract_yi_text<'a>(&self, text: &'a str) -> &'a str {
-        if let Some(pos) = text.find(" (") {
-            let base_text = &text[..pos];
-            // 如果包含[部首]标记，去除它
-            if base_text.starts_with("[部首] ") {
-                &base_text[9..] // 去掉"[部首] "前缀（7个字节）
-            } else {
-                base_text
-            }
-        } else {
-            // 处理没有括号的情况，也可能包含[部首]标记
-            if text.starts_with("[部首] ") {
-                &text[9..]
-            } else {
-                text
+    fn extract_yi_and_pinyin(&self, text: &str) -> (String, String) {
+        // 解析候选项文本，提取彝文和拼音
+        if let Some(start) = text.find(" (") {
+            if let Some(end) = text.rfind(')') {
+                let yi_part = text[..start].trim();
+                let pinyin_part = text[start + 2..end].trim();
+                
+                // 处理部首标记
+                let clean_yi = if yi_part.starts_with("[部首] ") {
+                    &yi_part[7..]
+                } else {
+                    yi_part
+                };
+                
+                return (clean_yi.to_string(), pinyin_part.to_string());
             }
         }
+        
+        // 如果解析失败，返回原文本作为彝文，空字符串作为拼音
+        (text.to_string(), String::new())
     }
-    
-    // 添加新的辅助方法来验证输入序列的合法性
+
     fn is_valid_input_sequence(&self, input: &str) -> bool {
         // 1. 检查是否为完整音节
         if self.yi_engine.syllable_set.contains(input) {
@@ -305,10 +359,30 @@ impl InputHandler {
         
         false
     }
-    
+
     fn is_potential_consonant(&self, input: &str) -> bool {
         // 检查是否有以此开头的音节
         self.yi_engine.pinyin_index.keys().any(|pinyin| pinyin.starts_with(input)) ||
         self.yi_engine.radical_pinyin_index.keys().any(|pinyin| pinyin.starts_with(input))
+    }
+    
+    fn extract_yi_text<'a>(&self, text: &'a str) -> &'a str {
+        // 提取实际的彝文文本（去掉括号中的拼音部分和[部首]标记）
+        if let Some(pos) = text.find(" (") {
+            let base_text = &text[..pos];
+            // 如果包含[部首]标记，去除它
+            if base_text.starts_with("[部首] ") {
+                &base_text[9..] // 去掉"[部首] "前缀（9个字节，因为包含中文字符）
+            } else {
+                base_text
+            }
+        } else {
+            // 处理没有括号的情况，也可能包含[部首]标记
+            if text.starts_with("[部首] ") {
+                &text[9..]
+            } else {
+                text
+            }
+        }
     }
 }

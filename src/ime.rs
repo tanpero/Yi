@@ -1,7 +1,6 @@
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::error::Error;
 
 /// 彝文输入法核心结构
 #[derive(Debug, Clone)]

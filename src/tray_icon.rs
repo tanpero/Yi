@@ -6,13 +6,25 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use winapi::um::libloaderapi::*;
+use crate::app_state::InputMode;
+use std::sync::{Arc, Mutex};
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 const ID_TRAY_ICON: u32 = 1001;
 
-// Fix: Change from u32 to i32
+// 菜单项ID
 const ID_MENU_ABOUT: i32 = 2001;
 const ID_MENU_EXIT: i32 = 2002;
+const ID_MENU_INPUT_MODE: i32 = 2003;
+const ID_MENU_YI_ONLY: i32 = 2004;
+const ID_MENU_PINYIN_YI: i32 = 2005;
+const ID_MENU_PINYIN_WITH_YI: i32 = 2006;
+const ID_MENU_YI_WITH_PINYIN: i32 = 2007;
+const ID_MENU_HTML_RUBY: i32 = 2008;
+
+// 全局变量
+static mut CURRENT_INPUT_MODE: InputMode = InputMode::YiOnly;
+static mut INPUT_MODE_CALLBACK: Option<Box<dyn Fn(InputMode) + Send + Sync>> = None;
 
 pub struct TrayIcon {
     hwnd: HWND,
@@ -114,35 +126,79 @@ impl TrayIcon {
         self.active = active;
         // 可以更新托盘图标状态
     }
+    
+    pub fn set_input_mode_callback<F>(&self, callback: F) 
+    where 
+        F: Fn(InputMode) + Send + Sync + 'static,
+    {
+        unsafe {
+            INPUT_MODE_CALLBACK = Some(Box::new(callback));
+        }
+    }
+    
+    pub fn update_input_mode(&self, mode: InputMode) {
+        unsafe {
+            CURRENT_INPUT_MODE = mode;
+        }
+    }
 }
 
-// 创建右键菜单
+// 修改create_context_menu函数
 unsafe fn create_context_menu() -> HMENU {
     let hmenu = CreatePopupMenu();
     
-    // 添加"关于"菜单项
+    // 创建"输入形式"子菜单
+    let input_mode_submenu = CreatePopupMenu();
+    
+    // 定义菜单项数据
+    let menu_items = [
+        (ID_MENU_YI_ONLY, InputMode::YiOnly, "彝文"),
+        (ID_MENU_PINYIN_YI, InputMode::PinyinYi, "拼音+彝文"),
+        (ID_MENU_PINYIN_WITH_YI, InputMode::PinyinWithYi, "拼音（彝文）"),
+        (ID_MENU_YI_WITH_PINYIN, InputMode::YiWithPinyin, "彝文（拼音）"),
+        (ID_MENU_HTML_RUBY, InputMode::HtmlRuby, "HTML注音"),
+    ];
+    
+    // 添加子菜单项，只使用原生的 MF_CHECKED 标志
+    for (id, mode, text) in menu_items.iter() {
+        AppendMenuW(
+            input_mode_submenu,
+            MF_STRING | if *mode == CURRENT_INPUT_MODE { MF_CHECKED } else { 0 },
+            *id as usize,
+            to_wide_string(text).as_ptr()
+        );
+    }
+    
+    // 添加"输入形式"主菜单项
     AppendMenuW(
         hmenu,
-        MF_STRING,
-        ID_MENU_ABOUT as usize,  // Cast to usize for AppendMenuW
-        to_wide_string("关于").as_ptr()
+        MF_STRING | MF_POPUP,
+        input_mode_submenu as usize,
+        to_wide_string("输入形式").as_ptr()
     );
     
     // 添加分隔线
     AppendMenuW(hmenu, MF_SEPARATOR, 0, ptr::null());
     
+    // 添加"关于"菜单项
+    AppendMenuW(
+        hmenu,
+        MF_STRING,
+        ID_MENU_ABOUT as usize,
+        to_wide_string("关于").as_ptr()
+    );
+    
     // 添加"退出"菜单项
     AppendMenuW(
         hmenu,
         MF_STRING,
-        ID_MENU_EXIT as usize,   // Cast to usize for AppendMenuW
+        ID_MENU_EXIT as usize,
         to_wide_string("退出").as_ptr()
     );
     
     hmenu
 }
 
-// 显示右键菜单
 unsafe fn show_context_menu(hwnd: HWND) {
     let hmenu = create_context_menu();
     
@@ -174,34 +230,63 @@ unsafe fn show_context_menu(hwnd: HWND) {
                 MB_OK | MB_ICONINFORMATION
             );
         }
-        // 在 show_context_menu 函数中的 ID_MENU_EXIT 处理部分
-ID_MENU_EXIT => {
-    // 移除托盘图标
-    let mut nid = NOTIFYICONDATAW {
-        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-        hWnd: hwnd,
-        uID: ID_TRAY_ICON,
-        uFlags: 0,
-        uCallbackMessage: 0,
-        hIcon: ptr::null_mut(),
-        szTip: [0; 128],
-        dwState: 0,
-        dwStateMask: 0,
-        szInfo: [0; 256],
-        u: std::mem::zeroed(),
-        szInfoTitle: [0; 64],
-        dwInfoFlags: 0,
-        guidItem: std::mem::zeroed(),
-        hBalloonIcon: ptr::null_mut(),
-    };
-    Shell_NotifyIconW(NIM_DELETE, &mut nid);
-    
-    // 强制退出进程，确保彻底关闭
-    unsafe {
-        use winapi::um::processthreadsapi::ExitProcess;
-        ExitProcess(0);
-    }
-}
+        ID_MENU_YI_ONLY => {
+            CURRENT_INPUT_MODE = InputMode::YiOnly;
+            if let Some(ref callback) = INPUT_MODE_CALLBACK {
+                callback(InputMode::YiOnly);
+            }
+        }
+        ID_MENU_PINYIN_YI => {
+            CURRENT_INPUT_MODE = InputMode::PinyinYi;
+            if let Some(ref callback) = INPUT_MODE_CALLBACK {
+                callback(InputMode::PinyinYi);
+            }
+        }
+        ID_MENU_PINYIN_WITH_YI => {
+            CURRENT_INPUT_MODE = InputMode::PinyinWithYi;
+            if let Some(ref callback) = INPUT_MODE_CALLBACK {
+                callback(InputMode::PinyinWithYi);
+            }
+        }
+        ID_MENU_YI_WITH_PINYIN => {
+            CURRENT_INPUT_MODE = InputMode::YiWithPinyin;
+            if let Some(ref callback) = INPUT_MODE_CALLBACK {
+                callback(InputMode::YiWithPinyin);
+            }
+        }
+        ID_MENU_HTML_RUBY => {
+            CURRENT_INPUT_MODE = InputMode::HtmlRuby;
+            if let Some(ref callback) = INPUT_MODE_CALLBACK {
+                callback(InputMode::HtmlRuby);
+            }
+        }
+        ID_MENU_EXIT => {
+            // 移除托盘图标
+            let mut nid = NOTIFYICONDATAW {
+                cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+                hWnd: hwnd,
+                uID: ID_TRAY_ICON,
+                uFlags: 0,
+                uCallbackMessage: 0,
+                hIcon: ptr::null_mut(),
+                szTip: [0; 128],
+                dwState: 0,
+                dwStateMask: 0,
+                szInfo: [0; 256],
+                u: std::mem::zeroed(),
+                szInfoTitle: [0; 64],
+                dwInfoFlags: 0,
+                guidItem: std::mem::zeroed(),
+                hBalloonIcon: ptr::null_mut(),
+            };
+            Shell_NotifyIconW(NIM_DELETE, &mut nid);
+            
+            // 强制退出进程，确保彻底关闭
+            unsafe {
+                use winapi::um::processthreadsapi::ExitProcess;
+                ExitProcess(0);
+            }
+        }
         _ => {}
     }
     
