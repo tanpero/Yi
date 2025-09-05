@@ -7,7 +7,6 @@ use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use winapi::um::libloaderapi::*;
 use crate::app_state::InputMode;
-use std::sync::{Arc, Mutex};
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 const ID_TRAY_ICON: u32 = 1001;
@@ -104,10 +103,10 @@ impl TrayIcon {
                 dwState: 0,
                 dwStateMask: 0,
                 szInfo: [0; 256],
-                u: unsafe { std::mem::zeroed() },
+                u: std::mem::zeroed(),
                 szInfoTitle: [0; 64],
                 dwInfoFlags: 0,
-                guidItem: unsafe { std::mem::zeroed() },
+                guidItem: std::mem::zeroed(),
                 hBalloonIcon: ptr::null_mut(),
             };
             
@@ -121,12 +120,7 @@ impl TrayIcon {
         }
         Ok(())
     }
-    
-    pub fn update_status(&mut self, active: bool) {
-        self.active = active;
-        // 可以更新托盘图标状态
-    }
-    
+        
     pub fn set_input_mode_callback<F>(&self, callback: F) 
     where 
         F: Fn(InputMode) + Send + Sync + 'static,
@@ -136,11 +130,6 @@ impl TrayIcon {
         }
     }
     
-    pub fn update_input_mode(&self, mode: InputMode) {
-        unsafe {
-            CURRENT_INPUT_MODE = mode;
-        }
-    }
 }
 
 // 修改create_context_menu函数
@@ -333,11 +322,4 @@ unsafe extern "system" fn tray_window_proc(
 
 fn to_wide_string(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
-}
-
-// 添加 MAKEINTRESOURCEW 宏
-macro_rules! MAKEINTRESOURCEW {
-    ($i:expr) => {
-        $i as *const u16
-    };
 }

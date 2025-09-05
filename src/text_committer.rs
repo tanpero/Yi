@@ -15,7 +15,7 @@ impl TextCommitter {
         text: &str,
         candidate_window: &mut CandidateWindow
     ) -> Result<(), Box<dyn std::error::Error>> {
-        println!("提交文本: {}", text);
+        // println!("提交文本: {}", text);
         
         // 提取实际的彝文文本
         let yi_text = self.extract_yi_text(text);

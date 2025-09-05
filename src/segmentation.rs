@@ -92,7 +92,6 @@ impl YiIME {
     /// 处理包含歧义字符的音节段
     fn handle_ambiguous_segment(&self, chars: &[char]) -> Vec<(Vec<String>, Vec<Vec<String>>, f32)> {
         let mut results = Vec::new();
-        let segment: String = chars.iter().collect();
         
         // 检查是否包含歧义字符
         let has_ambiguous = chars.iter().any(|&c| Self::is_ambiguous_char(c));
@@ -147,7 +146,7 @@ impl YiIME {
     }
 
     /// 去重并限制结果数量
-    fn deduplicate_results(&self, mut results: Vec<SegmentResult>, limit: usize) -> Vec<SegmentResult> {
+    fn deduplicate_results(&self, results: Vec<SegmentResult>, limit: usize) -> Vec<SegmentResult> {
         let mut seen = HashSet::new();
         let mut unique_results = Vec::new();
         

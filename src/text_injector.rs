@@ -1,14 +1,12 @@
 use crate::tsf_bridge::TSFBridge;
 use winapi::um::winuser::*;
-use winapi::shared::minwindef::*;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::thread;
 use std::time::Duration;
 
 pub struct TextInjector {
-    tsf_bridge: Option<TSFBridge>,
-    fallback_mode: bool,
+    tsf_bridge: Option<TSFBridge>
 }
 
 impl TextInjector {
@@ -16,20 +14,17 @@ impl TextInjector {
         // 尝试初始化TSF
         let tsf_bridge = match TSFBridge::new() {
             Ok(bridge) => {
-                println!("✓ TSF模式已启用");
+                // println!("✓ TSF模式已启用");
                 Some(bridge)
             },
             Err(e) => {
-                println!("⚠ TSF初始化失败: {}，使用剪贴板回退模式", e);
+                // println!("⚠ TSF初始化失败: {}，使用剪贴板回退模式", e);
                 None
             }
         };
         
-        let fallback_mode = tsf_bridge.is_none();
-        
         TextInjector {
-            tsf_bridge,
-            fallback_mode,
+            tsf_bridge
         }
     }
     
@@ -38,33 +33,21 @@ impl TextInjector {
             // 优先使用TSF进行真正的文本插入
             match tsf.insert_text(text) {
                 Ok(_) => {
-                    println!("✓ TSF文本插入成功: {}", text);
+                    // println!("✓ TSF文本插入成功: {}", text);
                     Ok(())
                 },
                 Err(e) => {
-                    println!("⚠ TSF文本插入失败: {}，回退到剪贴板模式", e);
+                    // println!("⚠ TSF文本插入失败: {}，回退到剪贴板模式", e);
                     self.inject_via_clipboard(text)
                 }
             }
         } else {
             // 回退到剪贴板模式
-            println!("使用剪贴板模式插入文本: {}", text);
+            // println!("使用剪贴板模式插入文本: {}", text);
             self.inject_via_clipboard(text)
         }
     }
-    
-    pub fn is_tsf_enabled(&self) -> bool {
-        self.tsf_bridge.is_some()
-    }
-    
-    pub fn get_mode_description(&self) -> &'static str {
-        if self.tsf_bridge.is_some() {
-            "TSF模式（真正的输入法接口）"
-        } else {
-            "剪贴板模式（Ctrl+V回退）"
-        }
-    }
-    
+        
     // 保留原有的剪贴板方法作为回退
     fn inject_via_clipboard(&self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
         use winapi::um::winuser::{OpenClipboard, EmptyClipboard, SetClipboardData, CloseClipboard};

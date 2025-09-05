@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::Path;
-
 fn main() {
     if cfg!(target_os = "windows") {
         // 编译资源文件

@@ -6,7 +6,7 @@ mod text_injector;
 mod tray_icon;
 mod input_handler;
 mod candidate_manager;
-mod text_committer;
+// 移除 text_committer 模块导入
 mod app_state;
 mod tsf_bridge;
 
@@ -16,7 +16,6 @@ use crate::text_injector::TextInjector;
 use crate::tray_icon::TrayIcon;
 use crate::input_handler::InputHandler;
 use crate::candidate_manager::CandidateManager;
-use crate::text_committer::TextCommitter;
 use crate::app_state::AppState;
 use yi::YiIME;
 use winapi::um::winuser::*;
@@ -24,7 +23,6 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::Duration;
 use winapi::shared::windef::*;
-use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONERROR};
 
 struct GlobalIME {
     hook: GlobalHook,
@@ -32,7 +30,7 @@ struct GlobalIME {
     tray_icon: TrayIcon,
     input_handler: InputHandler,
     candidate_manager: CandidateManager,
-    text_committer: TextCommitter,
+    text_injector: TextInjector,  // 直接持有 TextInjector
     app_state: AppState,
     key_receiver: Receiver<KeyEvent>,
 }
@@ -69,7 +67,9 @@ impl GlobalIME {
         
         let input_handler = InputHandler::new(yi_engine.clone().into(), app_state.clone().into());
         let candidate_manager = CandidateManager::new(yi_engine.into());
-        let text_committer = TextCommitter::new(text_injector);
+        
+        // 初始化英文输入状态
+        app_state.set_english_input_state(crate::app_state::EnglishInputState::Yi);
         
         Ok(GlobalIME {
             hook,
@@ -77,7 +77,7 @@ impl GlobalIME {
             tray_icon,
             input_handler,
             candidate_manager,
-            text_committer,
+            text_injector,  // 直接使用 TextInjector
             app_state,
             key_receiver,
         })
@@ -124,7 +124,7 @@ impl GlobalIME {
         self.input_handler.handle_key_event(
             event, 
             &mut self.candidate_window, 
-            &self.text_committer.text_injector
+            &self.text_injector  // 直接传递 TextInjector
         )?;
         
         // 更新应用状态
@@ -139,19 +139,6 @@ impl GlobalIME {
         );
         
         Ok(())
-    }
-}
-
-fn show_error_dialog(message: &str) {
-    unsafe {
-        let wide_msg: Vec<u16> = message.encode_utf16().chain(std::iter::once(0)).collect();
-        let wide_title: Vec<u16> = "彝文输入法启动错误".encode_utf16().chain(std::iter::once(0)).collect();
-        MessageBoxW(
-            std::ptr::null_mut(),
-            wide_msg.as_ptr(),
-            wide_title.as_ptr(),
-            MB_OK | MB_ICONERROR
-        );
     }
 }
 

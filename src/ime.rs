@@ -55,8 +55,8 @@ impl YiIME {
             }
         }
         
-        println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
-                self.dictionary.len(), self.syllable_set.len());
+        // println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
+        //         self.dictionary.len(), self.syllable_set.len());
         Ok(())
     }
 
@@ -74,7 +74,7 @@ impl YiIME {
             }
         }
         
-        println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
+        // println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
         Ok(())
     }
 
@@ -103,8 +103,8 @@ impl YiIME {
             }
         }
         
-        println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
-                self.dictionary.len(), self.syllable_set.len());
+        // println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
+        //         self.dictionary.len(), self.syllable_set.len());
         Ok(())
     }
 
@@ -121,7 +121,7 @@ impl YiIME {
             }
         }
         
-        println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
+        // println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
         Ok(())
     }
 

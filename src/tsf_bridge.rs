@@ -1,7 +1,6 @@
-use std::ffi::{CString, CStr};
+use std::ffi::{CString};
 use std::os::raw::{c_char, c_int};
 use std::sync::{Arc, Mutex};
-use std::ptr;
 
 // 外部C++函数声明
 extern "C" {
@@ -22,8 +21,8 @@ impl TSFBridge {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // 检查是否已经初始化
         {
-            let mut instance = TSF_INSTANCE.lock().unwrap();
-            if let Some(ref existing) = *instance {
+            let instance = TSF_INSTANCE.lock().unwrap();
+            if instance.is_some() {
                 return Ok(TSFBridge { initialized: true });
             }
         }
@@ -38,7 +37,7 @@ impl TSFBridge {
                     let mut instance = TSF_INSTANCE.lock().unwrap();
                     *instance = Some(Arc::new(TSFBridge { initialized: true }));
                     
-                    println!("TSF初始化成功");
+                    // println!("TSF初始化成功");
                     Ok(bridge)
                 },
                 -1 => Err("COM初始化失败".into()),
@@ -67,7 +66,7 @@ impl TSFBridge {
             let result = tsf_insert_text(c_text.as_ptr());
             match result {
                 0 => {
-                    println!("TSF文本插入成功: {}", text);
+                    // println!("TSF文本插入成功: {}", text);
                     Ok(())
                 },
                 -1 => Err("TSF服务未初始化或文本为空".into()),
@@ -80,10 +79,6 @@ impl TSFBridge {
         }
     }
     
-    pub fn is_available() -> bool {
-        let instance = TSF_INSTANCE.lock().unwrap();
-        instance.is_some()
-    }
 }
 
 impl Drop for TSFBridge {
@@ -92,9 +87,9 @@ impl Drop for TSFBridge {
             unsafe {
                 let result = tsf_cleanup();
                 if result == 0 {
-                    println!("TSF清理完成");
+                    // println!("TSF清理完成");
                 } else {
-                    println!("TSF清理失败，错误代码: {}", result);
+                    // println!("TSF清理失败，错误代码: {}", result);
                 }
             }
             
