@@ -37,8 +37,7 @@ impl TSFBridge {
                     let mut instance = TSF_INSTANCE.lock().unwrap();
                     *instance = Some(Arc::new(TSFBridge { initialized: true }));
                     
-                    // println!("TSF初始化成功");
-                    Ok(bridge)
+                                        Ok(bridge)
                 },
                 -1 => Err("COM初始化失败".into()),
                 -2 => Err("TSF服务创建失败".into()),
@@ -66,8 +65,7 @@ impl TSFBridge {
             let result = tsf_insert_text(c_text.as_ptr());
             match result {
                 0 => {
-                    // println!("TSF文本插入成功: {}", text);
-                    Ok(())
+                                        Ok(())
                 },
                 -1 => Err("TSF服务未初始化或文本为空".into()),
                 -2 => Err("文本编码转换失败".into()),
@@ -87,10 +85,8 @@ impl Drop for TSFBridge {
             unsafe {
                 let result = tsf_cleanup();
                 if result == 0 {
-                    // println!("TSF清理完成");
-                } else {
-                    // println!("TSF清理失败，错误代码: {}", result);
-                }
+                                    } else {
+                                    }
             }
             
             // 清除全局实例

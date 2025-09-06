@@ -99,8 +99,7 @@ impl CandidateWindow {
     }
     
     pub fn show_candidates(&mut self, candidates: Vec<String>, input: &str) {
-        // println!("显示候选词: {:?}", candidates);
-        
+                
         if let Ok(mut guard) = self.candidates.lock() {
             *guard = candidates;
         }

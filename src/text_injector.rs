@@ -14,12 +14,10 @@ impl TextInjector {
         // 尝试初始化TSF
         let tsf_bridge = match TSFBridge::new() {
             Ok(bridge) => {
-                // println!("✓ TSF模式已启用");
-                Some(bridge)
+                                Some(bridge)
             },
             Err(e) => {
-                // println!("⚠ TSF初始化失败: {}，使用剪贴板回退模式", e);
-                None
+                                None
             }
         };
         
@@ -33,18 +31,15 @@ impl TextInjector {
             // 优先使用TSF进行真正的文本插入
             match tsf.insert_text(text) {
                 Ok(_) => {
-                    // println!("✓ TSF文本插入成功: {}", text);
-                    Ok(())
+                                        Ok(())
                 },
                 Err(e) => {
-                    // println!("⚠ TSF文本插入失败: {}，回退到剪贴板模式", e);
-                    self.inject_via_clipboard(text)
+                                        self.inject_via_clipboard(text)
                 }
             }
         } else {
             // 回退到剪贴板模式
-            // println!("使用剪贴板模式插入文本: {}", text);
-            self.inject_via_clipboard(text)
+                        self.inject_via_clipboard(text)
         }
     }
         

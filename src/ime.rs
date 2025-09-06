@@ -55,8 +55,6 @@ impl YiIME {
             }
         }
         
-        // println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
-        //         self.dictionary.len(), self.syllable_set.len());
         Ok(())
     }
 
@@ -74,8 +72,7 @@ impl YiIME {
             }
         }
         
-        // println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
-        Ok(())
+                Ok(())
     }
 
     /// 从嵌入的JSON字符串加载字典
@@ -102,9 +99,6 @@ impl YiIME {
                 }
             }
         }
-        
-        // println!("字典加载完成，共 {} 个彝文字符，{} 个音节", 
-        //         self.dictionary.len(), self.syllable_set.len());
         Ok(())
     }
 
@@ -121,8 +115,7 @@ impl YiIME {
             }
         }
         
-        // println!("部首字典加载完成，共 {} 个部首", self.radical_dictionary.len());
-        Ok(())
+                Ok(())
     }
 
     /// 检查字符是否为歧义字符

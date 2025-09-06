@@ -191,8 +191,6 @@ HRESULT YiTextService::InsertTextViaSendInput(const WCHAR *pszText) {
         return S_OK;
     }
     
-    printf("InsertTextViaSendInput: 使用SendInput插入文本: %ls\n", pszText);
-    
     // 创建INPUT结构数组
     std::vector<INPUT> inputs;
     inputs.reserve(len * 2); // 每个字符需要按下和释放
@@ -216,8 +214,6 @@ HRESULT YiTextService::InsertTextViaSendInput(const WCHAR *pszText) {
     // 发送输入事件
     UINT sent = SendInput((UINT)inputs.size(), inputs.data(), sizeof(INPUT));
     
-    printf("InsertTextViaSendInput: 发送了 %u/%zu 个输入事件\n", sent, inputs.size());
-    
     return (sent == inputs.size()) ? S_OK : E_FAIL;
 }
 
@@ -231,17 +227,13 @@ HRESULT YiTextService::InsertText(const WCHAR *pszText) {
     if (!m_pContext) {
         HRESULT hr = _GetFocusContext();
         if (FAILED(hr)) {
-            printf("InsertText: 获取焦点上下文失败，使用SendInput\n");
             return InsertTextViaSendInput(pszText);
         }
     }
     
     if (!m_pContext) {
-        printf("InsertText: 上下文仍为空，使用SendInput\n");
         return InsertTextViaSendInput(pszText);
     }
-    
-    printf("InsertText: 创建EditSession\n");
     
     YiEditSession *pEditSession = new YiEditSession(this, pszText);
     if (!pEditSession) {
@@ -252,17 +244,13 @@ HRESULT YiTextService::InsertText(const WCHAR *pszText) {
     // 请求同步编辑会话，确保立即执行
     HRESULT hrSession = m_pContext->RequestEditSession(m_tfClientId, pEditSession, TF_ES_READWRITE | TF_ES_SYNC, &hr);
     
-    printf("InsertText: RequestEditSession返回: 0x%08X, 编辑结果: 0x%08X\n", hrSession, hr);
-    
     pEditSession->Release();
     
     if (FAILED(hrSession)) {
-        printf("InsertText: EditSession请求失败，使用SendInput\n");
         return InsertTextViaSendInput(pszText);
     }
     
     if (FAILED(hr)) {
-        printf("InsertText: 编辑操作失败，使用SendInput\n");
         return InsertTextViaSendInput(pszText);
     }
     
@@ -406,7 +394,6 @@ extern "C" {
         
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         if (FAILED(hr)) {
-            printf("COM初始化失败: 0x%08X\n", hr);
             return -1;
         }
         
@@ -419,7 +406,6 @@ extern "C" {
         ITfThreadMgr *pThreadMgr = nullptr;
         hr = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_ITfThreadMgr, (void**)&pThreadMgr);
         if (FAILED(hr)) {
-            printf("ThreadMgr创建失败: 0x%08X\n", hr);
             delete g_pTextService;
             g_pTextService = nullptr;
             CoUninitialize();
@@ -429,7 +415,6 @@ extern "C" {
         TfClientId clientId;
         hr = pThreadMgr->Activate(&clientId);
         if (FAILED(hr)) {
-            printf("ThreadMgr激活失败: 0x%08X\n", hr);
             pThreadMgr->Release();
             delete g_pTextService;
             g_pTextService = nullptr;
@@ -439,7 +424,6 @@ extern "C" {
         
         hr = g_pTextService->Activate(pThreadMgr, clientId);
         if (FAILED(hr)) {
-            printf("TextService激活失败: 0x%08X\n", hr);
             pThreadMgr->Deactivate();
             pThreadMgr->Release();
             delete g_pTextService;
@@ -450,7 +434,6 @@ extern "C" {
         
         pThreadMgr->Release();
         
-        printf("TSF初始化成功，ClientId: %d\n", clientId);
         return 0;
     }
     
@@ -542,36 +525,25 @@ STDMETHODIMP_(ULONG) YiEditSession::Release() {
 STDMETHODIMP YiEditSession::DoEditSession(TfEditCookie ec) {
     ITfContext *pContext = m_pTextService->GetContext();
     if (!pContext || !m_pszText) {
-        printf("DoEditSession: 上下文或文本为空\n");
         return E_FAIL;
     }
-    
-    printf("DoEditSession: 开始插入文本: %ls\n", m_pszText);
     
     ITfInsertAtSelection *pInsertAtSelection = nullptr;
     ITfRange *pRange = nullptr;
     
     HRESULT hr = pContext->QueryInterface(IID_ITfInsertAtSelection, (void**)&pInsertAtSelection);
     if (FAILED(hr)) {
-        printf("DoEditSession: 获取InsertAtSelection接口失败: 0x%08X\n", hr);
         return hr;
     }
     
-    printf("DoEditSession: 成功获取InsertAtSelection接口\n");
-    
     hr = pInsertAtSelection->InsertTextAtSelection(ec, 0, m_pszText, (LONG)wcslen(m_pszText), &pRange);
-    printf("DoEditSession: InsertTextAtSelection返回: 0x%08X\n", hr);
-    
     if (SUCCEEDED(hr)) {
         if (pRange) {
-            printf("DoEditSession: 成功创建文本范围\n");
             pRange->Release();
         } else {
-            printf("DoEditSession: 警告：文本范围为空\n");
-        }
+            }
     } else {
-        printf("DoEditSession: InsertTextAtSelection失败: 0x%08X\n", hr);
-    }
+        }
     
     pInsertAtSelection->Release();
     

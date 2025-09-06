@@ -27,8 +27,7 @@ impl InputHandler {
         candidate_window: &mut CandidateWindow,
         text_injector: &TextInjector
     ) -> Result<bool, Box<dyn std::error::Error>> {
-        // println!("处理键盘事件: vk_code={}, is_key_down={}", event.vk_code, event.is_key_down);
-        
+                
         if !event.is_key_down {
             return Ok(false);
         }
@@ -41,15 +40,13 @@ impl InputHandler {
         if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
                 self.input_buffer.pop();
-                // println!("退格后输入缓冲区: '{}'", self.input_buffer);
-                
+                                
                 // 更新缓冲区状态
                 crate::global_hook::set_input_buffer_empty(self.input_buffer.is_empty());
                 
                 if self.input_buffer.is_empty() {
                     candidate_window.hide();
-                    // println!("输入缓冲区已清空，隐藏候选窗口");
-                } else {
+                                    } else {
                     // 立即更新输入框显示，无论是否有候选词
                     candidate_window.show_candidates(vec![], &self.input_buffer);
                     // 返回 true 让主循环更新候选词（基于最后一次合法音节序列）
@@ -63,19 +60,16 @@ impl InputHandler {
         if event.vk_code >= 0x31 && event.vk_code <= 0x39 {
             if !self.input_buffer.is_empty() {
                 let number = (event.vk_code - 0x30) as usize;
-                // println!("按下数字键: {}", number);
-                
+                                
                 let candidates_count = candidate_window.get_candidates_count();
                 
                 if number <= candidates_count {
                     if let Some(selected) = candidate_window.select_by_number(number) {
-                        // println!("选中候选词: {}", selected);
-                        self.commit_text(&selected, candidate_window, text_injector)?;
+                                                self.commit_text(&selected, candidate_window, text_injector)?;
                         return Ok(false);
                     }
                 } else {
-                    // println!("数字键 {} 超出候选词数量 {}，忽略", number, candidates_count);
-                }
+                                    }
             }
             return Ok(false);
         }
@@ -83,13 +77,11 @@ impl InputHandler {
         // 处理字母键
         if event.vk_code >= 0x41 && event.vk_code <= 0x5A {
             let ch = (event.vk_code as u8 as char).to_lowercase().next().unwrap_or('\0');
-            // println!("转换的字符: '{}'", ch);
-            
+                        
             if ch >= 'a' && ch <= 'z' {
                 // 直接添加字符到输入缓冲区
                 self.input_buffer.push(ch);
-                // println!("当前输入缓冲区: '{}'", self.input_buffer);
-                
+                                
                 // 更新全局钩子的缓冲区状态
                 crate::global_hook::set_input_buffer_empty(false);
                 
@@ -109,8 +101,7 @@ impl InputHandler {
         if event.vk_code == VK_SPACE as u32 {
             if !self.input_buffer.is_empty() {
                 if let Some(selected) = candidate_window.get_selected_candidate() {
-                    // println!("空格键选中第一个候选词: {}", selected);
-                    self.commit_text(&selected, candidate_window, text_injector)?;
+                                        self.commit_text(&selected, candidate_window, text_injector)?;
                 }
             }
             return Ok(false);
@@ -118,8 +109,7 @@ impl InputHandler {
         
         // 处理ESC键
         if event.vk_code == VK_ESCAPE as u32 {
-            // println!("ESC键取消输入");
-            self.input_buffer.clear();
+                        self.input_buffer.clear();
             crate::global_hook::set_input_buffer_empty(true);
             candidate_window.hide();
             return Ok(false);
@@ -179,8 +169,7 @@ impl InputHandler {
             if should_commit {
                 // 先提交第一个候选词
                 if let Some(selected) = candidate_window.get_selected_candidate() {
-                    // println!("特殊按键提交候选词: {} + 标点: {}", selected, punctuation_char);
-                    
+                                        
                     // 提取实际的彝文文本
                     let yi_text = self.extract_yi_text(&selected);
                     
@@ -272,8 +261,7 @@ impl InputHandler {
         candidate_window: &mut CandidateWindow,
         text_injector: &TextInjector
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // println!("提交文本: {}", text);
-        
+                
         // 提取彝文文本和拼音
         let (yi_text, pinyin) = self.extract_yi_and_pinyin(text);
         
