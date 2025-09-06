@@ -7,6 +7,7 @@ use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use winapi::um::libloaderapi::*;
 use crate::app_state::InputMode;
+use crate::i18n::{t, Language, set_language};
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 const ID_TRAY_ICON: u32 = 1001;
@@ -21,7 +22,16 @@ const ID_MENU_PINYIN_WITH_YI: i32 = 2006;
 const ID_MENU_YI_WITH_PINYIN: i32 = 2007;
 const ID_MENU_HTML_RUBY: i32 = 2008;
 
-// 全局变量
+// 语言菜单常量
+const ID_MENU_LANG_ZH: i32 = 2009;
+const ID_MENU_LANG_ZH_TW: i32 = 2010;  // 新增繁体中文
+const ID_MENU_LANG_EN: i32 = 2011;
+const ID_MENU_LANG_FR: i32 = 2012;
+const ID_MENU_LANG_DE: i32 = 2013;
+const ID_MENU_LANG_RU: i32 = 2014;
+const ID_MENU_LANG_JA: i32 = 2015;
+const ID_MENU_LANG_KO: i32 = 2016;     // 新增韩语
+
 static mut CURRENT_INPUT_MODE: InputMode = InputMode::YiOnly;
 static mut INPUT_MODE_CALLBACK: Option<Box<dyn Fn(InputMode) + Send + Sync>> = None;
 
@@ -111,7 +121,7 @@ impl TrayIcon {
             };
             
             // 设置提示文本
-            let tip = to_wide_string("彝文输入法 - 按F4切换输入模式");
+            let tip = to_wide_string(&t("tray_tooltip"));
             for (i, &ch) in tip.iter().take(127).enumerate() {
                 nid.szTip[i] = ch;
             }
@@ -139,13 +149,13 @@ unsafe fn create_context_menu() -> HMENU {
     // 创建"输入形式"子菜单
     let input_mode_submenu = CreatePopupMenu();
     
-    // 定义菜单项数据
+    // 定义菜单项数据 - 使用国际化文本
     let menu_items = [
-        (ID_MENU_YI_ONLY, InputMode::YiOnly, "彝文"),
-        (ID_MENU_PINYIN_YI, InputMode::PinyinYi, "拼音+彝文"),
-        (ID_MENU_PINYIN_WITH_YI, InputMode::PinyinWithYi, "拼音（彝文）"),
-        (ID_MENU_YI_WITH_PINYIN, InputMode::YiWithPinyin, "彝文（拼音）"),
-        (ID_MENU_HTML_RUBY, InputMode::HtmlRuby, "HTML注音"),
+        (ID_MENU_YI_ONLY, InputMode::YiOnly, t("menu_yi_only")),
+        (ID_MENU_PINYIN_YI, InputMode::PinyinYi, t("menu_pinyin_yi")),
+        (ID_MENU_PINYIN_WITH_YI, InputMode::PinyinWithYi, t("menu_pinyin_with_yi")),
+        (ID_MENU_YI_WITH_PINYIN, InputMode::YiWithPinyin, t("menu_yi_with_pinyin")),
+        (ID_MENU_HTML_RUBY, InputMode::HtmlRuby, t("menu_html_ruby")),
     ];
     
     // 添加子菜单项，只使用原生的 MF_CHECKED 标志
@@ -163,7 +173,36 @@ unsafe fn create_context_menu() -> HMENU {
         hmenu,
         MF_STRING | MF_POPUP,
         input_mode_submenu as usize,
-        to_wide_string("输入形式").as_ptr()
+        to_wide_string(&t("menu_input_mode")).as_ptr()
+    );
+    
+    // 添加语言选择子菜单
+    let language_submenu = CreatePopupMenu();
+    let languages = [
+        (ID_MENU_LANG_ZH, Language::ChineseSimplified),
+        (ID_MENU_LANG_ZH_TW, Language::ChineseTraditional),
+        (ID_MENU_LANG_EN, Language::English),
+        (ID_MENU_LANG_FR, Language::French),
+        (ID_MENU_LANG_DE, Language::German),
+        (ID_MENU_LANG_RU, Language::Russian),
+        (ID_MENU_LANG_JA, Language::Japanese),
+        (ID_MENU_LANG_KO, Language::Korean),
+    ];
+    
+    for (id, lang) in &languages {
+        AppendMenuW(
+            language_submenu,
+            MF_STRING,
+            *id as usize,
+            to_wide_string(lang.name()).as_ptr()
+        );
+    }
+    
+    AppendMenuW(
+        hmenu,
+        MF_STRING | MF_POPUP,
+        language_submenu as usize,
+        to_wide_string(&t("menu_language")).as_ptr()
     );
     
     // 添加分隔线
@@ -174,7 +213,7 @@ unsafe fn create_context_menu() -> HMENU {
         hmenu,
         MF_STRING,
         ID_MENU_ABOUT as usize,
-        to_wide_string("关于").as_ptr()
+        to_wide_string(&t("menu_about")).as_ptr()
     );
     
     // 添加"退出"菜单项
@@ -182,40 +221,20 @@ unsafe fn create_context_menu() -> HMENU {
         hmenu,
         MF_STRING,
         ID_MENU_EXIT as usize,
-        to_wide_string("退出").as_ptr()
+        to_wide_string(&t("menu_exit")).as_ptr()
     );
     
     hmenu
 }
 
-unsafe fn show_context_menu(hwnd: HWND) {
-    let hmenu = create_context_menu();
-    
-    // 获取鼠标位置
-    let mut pt = POINT { x: 0, y: 0 };
-    GetCursorPos(&mut pt);
-    
-    // 设置前台窗口，确保菜单能正确显示和消失
-    SetForegroundWindow(hwnd);
-    
-    // 显示菜单
-    let cmd = TrackPopupMenu(
-        hmenu,
-        TPM_RIGHTBUTTON | TPM_RETURNCMD,
-        pt.x,
-        pt.y,
-        0,
-        hwnd,
-        ptr::null()
-    );
-    
-    // 处理菜单选择
+// 处理菜单选择
+unsafe fn handle_menu_command(hwnd: HWND, cmd: i32) {
     match cmd {
         ID_MENU_ABOUT => {
             MessageBoxW(
                 hwnd,
-                to_wide_string("彝文输入法 1.0.0\n\n按F4激活/关闭输入彝文输入模式\n\nCamille Dolma © 2025").as_ptr(),
-                to_wide_string("关于 - 彝文输入法").as_ptr(),
+                to_wide_string(&t("about_message")).as_ptr(),
+                to_wide_string(&t("about_title")).as_ptr(),
                 MB_OK | MB_ICONINFORMATION
             );
         }
@@ -249,34 +268,55 @@ unsafe fn show_context_menu(hwnd: HWND) {
                 callback(InputMode::HtmlRuby);
             }
         }
+        ID_MENU_LANG_ZH => set_language(Language::ChineseSimplified),
+ID_MENU_LANG_ZH_TW => set_language(Language::ChineseTraditional),
+ID_MENU_LANG_EN => set_language(Language::English),
+ID_MENU_LANG_FR => set_language(Language::French),
+ID_MENU_LANG_DE => set_language(Language::German),
+ID_MENU_LANG_RU => set_language(Language::Russian),
+ID_MENU_LANG_JA => set_language(Language::Japanese),
+ID_MENU_LANG_KO => set_language(Language::Korean),
         ID_MENU_EXIT => {
             // 移除托盘图标
-            let mut nid = NOTIFYICONDATAW {
-                cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-                hWnd: hwnd,
-                uID: ID_TRAY_ICON,
-                uFlags: 0,
-                uCallbackMessage: 0,
-                hIcon: ptr::null_mut(),
-                szTip: [0; 128],
-                dwState: 0,
-                dwStateMask: 0,
-                szInfo: [0; 256],
-                u: std::mem::zeroed(),
-                szInfoTitle: [0; 64],
-                dwInfoFlags: 0,
-                guidItem: std::mem::zeroed(),
-                hBalloonIcon: ptr::null_mut(),
-            };
+            let mut nid: NOTIFYICONDATAW = std::mem::zeroed();
+            nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
+            nid.hWnd = hwnd;
+            nid.uID = ID_TRAY_ICON;
             Shell_NotifyIconW(NIM_DELETE, &mut nid);
             
             // 强制退出进程，确保彻底关闭
-            unsafe {
-                use winapi::um::processthreadsapi::ExitProcess;
-                ExitProcess(0);
-            }
+            use winapi::um::processthreadsapi::ExitProcess;
+            ExitProcess(0);
         }
         _ => {}
+    }
+}
+
+// 显示上下文菜单
+unsafe fn show_context_menu(hwnd: HWND) {
+    let hmenu = create_context_menu();
+    
+    // 获取鼠标位置
+    let mut pt: POINT = std::mem::zeroed();
+    GetCursorPos(&mut pt);
+    
+    // 设置前台窗口以确保菜单正确显示
+    SetForegroundWindow(hwnd);
+    
+    // 显示上下文菜单
+    let cmd = TrackPopupMenu(
+        hmenu,
+        TPM_RIGHTBUTTON | TPM_RETURNCMD,
+        pt.x,
+        pt.y,
+        0,
+        hwnd,
+        ptr::null()
+    );
+    
+    // 处理菜单选择
+    if cmd != 0 {
+        handle_menu_command(hwnd, cmd);
     }
     
     // 清理菜单

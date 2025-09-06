@@ -36,7 +36,6 @@ impl InputHandler {
         crate::global_hook::set_input_buffer_empty(self.input_buffer.is_empty());
         
         // 处理退格键
-        // 处理退格键
         if event.vk_code == VK_BACK as u32 {
             if !self.input_buffer.is_empty() {
                 self.input_buffer.pop();
@@ -232,7 +231,7 @@ impl InputHandler {
 
             },
             InputMode::HtmlRuby => {
-                // HTML排版：每个彝文字符都用ruby标签包装
+                // HTML注音：每个彝文字符都用ruby标签包装
                 self.format_as_html_ruby(yi_text, pinyin)
             },
         }
@@ -275,7 +274,7 @@ impl InputHandler {
         text_injector.inject_text(&formatted_text)?;
         
         // 等待一小段时间确保文本注入完成
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(10));
         
         // 重置注入标志
         crate::global_hook::set_injecting_text(false);
@@ -300,7 +299,7 @@ impl InputHandler {
                 
                 // 处理部首标记
                 let clean_yi = if yi_part.starts_with("[部首] ") {
-                    &yi_part[7..]
+                    &yi_part[9..]
                 } else {
                     yi_part
                 };

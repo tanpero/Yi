@@ -6,9 +6,9 @@ mod text_injector;
 mod tray_icon;
 mod input_handler;
 mod candidate_manager;
-// 移除 text_committer 模块导入
 mod app_state;
 mod tsf_bridge;
+mod i18n;
 
 use crate::global_hook::{GlobalHook, KeyEvent};
 use crate::candidate_window::CandidateWindow;
@@ -143,10 +143,11 @@ impl GlobalIME {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("正在启动彝文输入法...");
+    // 初始化国际化
+    i18n::init_i18n()?;
     
-    let mut ime = GlobalIME::new()?;
-    ime.run()?;
+    println!("{}", i18n::t("input_mode_activated"));
     
-    Ok(())
+    let mut global_ime = GlobalIME::new()?;
+    global_ime.run()
 }

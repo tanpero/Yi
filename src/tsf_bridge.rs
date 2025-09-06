@@ -1,6 +1,7 @@
 use std::ffi::{CString};
 use std::os::raw::{c_char, c_int};
 use std::sync::{Arc, Mutex};
+use crate::i18n::t;
 
 // 外部C++函数声明
 extern "C" {
@@ -39,17 +40,17 @@ impl TSFBridge {
                     
                                         Ok(bridge)
                 },
-                -1 => Err("COM初始化失败".into()),
-                -2 => Err("TSF服务创建失败".into()),
-                -3 => Err("TSF激活失败".into()),
-                _ => Err(format!("TSF初始化失败，错误代码: {}", result).into()),
+                -1 => Err(t("error_com_init_failed").into()),
+                -2 => Err(t("error_tsf_service_failed").into()),
+                -3 => Err(t("error_tsf_activation_failed").into()),
+                _ => Err(format!("{}: {}", t("error_tsf_activation_failed"), result).into()),
             }
         }
     }
     
     pub fn insert_text(&self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
         if !self.initialized {
-            return Err("TSF未初始化".into());
+            return Err(t("error_tsf_not_initialized").into());
         }
         
         // 验证文本不为空
@@ -59,20 +60,18 @@ impl TSFBridge {
         
         // 转换为C字符串
         let c_text = CString::new(text)
-            .map_err(|e| format!("文本转换失败: {}", e))?;
+            .map_err(|e| format!("{}: {}", t("error_text_conversion_failed"), e))?;
         
         unsafe {
             let result = tsf_insert_text(c_text.as_ptr());
             match result {
-                0 => {
-                                        Ok(())
-                },
-                -1 => Err("TSF服务未初始化或文本为空".into()),
-                -2 => Err("文本编码转换失败".into()),
-                -3 => Err("TSF文本插入失败".into()),
-                -4 => Err("无法获取焦点上下文，请确保目标应用程序处于活动状态".into()),
-                -5 => Err("内存不足".into()),
-                _ => Err(format!("TSF文本插入失败，错误代码: {}", result).into()),
+                0 => Ok(()),
+                -1 => Err(t("error_tsf_not_initialized").into()),
+                -2 => Err(t("error_text_conversion_failed").into()),
+                -3 => Err(t("error_tsf_insert_failed").into()),
+                -4 => Err(t("error_no_focus_context").into()),
+                -5 => Err(t("error_insufficient_memory").into()),
+                _ => Err(format!("{}: {}", t("error_tsf_insert_failed"), result).into()),
             }
         }
     }

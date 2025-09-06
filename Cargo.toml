@@ -23,7 +23,8 @@ winapi = { version = "0.3", features = [
     "objbase",
     "oleauto",
     "dwmapi",
-    "winerror"
+    "winerror",
+    "winnls"
 ]}
 
 [build-dependencies]
