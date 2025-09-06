@@ -11,7 +11,7 @@
     "menu_exit": "退出",
     "menu_language": "语言",
     "about_title": "关于 - 彝文输入法",
-    "about_message": "彝文输入法 1.0.0\n\n按F4激活/关闭输入彝文输入模式\n\nCamille Dolma © 2025",
+    "about_message": "彝文输入法 1.2.0\n\n按F4激活/关闭输入彝文输入模式\n\nCamille Dolma © 2025",
     "candidate_window_title": "候选词窗口",
     "radical_prefix": "部首"
   },
@@ -27,12 +27,12 @@
     "menu_exit": "退出",
     "menu_language": "語言",
     "about_title": "關於 - 彝文輸入法",
-    "about_message": "彝文輸入法 1.0.0\n\n按F4激活/關閉輸入彝文輸入模式\n\nCamille Dolma © 2025",
+    "about_message": "彝文輸入法 1.2.0\n\n按F4激活/關閉輸入彝文輸入模式\n\nCamille Dolma © 2025",
     "candidate_window_title": "候選詞窗口",
     "radical_prefix": "部首"
   },
   "en": {
-    "tray_tooltip": "Yi IME - Press F4 to toggle input mode",
+    "tray_tooltip": "Yi Input Method - Press F4 to toggle input mode",
     "menu_yi_only": "Yi Only",
     "menu_pinyin_yi": "Pinyin+Yi",
     "menu_pinyin_with_yi": "Pinyin(Yi)",
@@ -41,13 +41,13 @@
     "menu_about": "About",
     "menu_exit": "Exit",
     "menu_language": "Language",
-    "about_title": "About - Yi IME",
-    "about_message": "Yi IME 1.0.0\n\nPress F4 to activate/deactivate Yi input mode\n\nCamille Dolma © 2025",
+    "about_title": "About - Yi Input Method",
+    "about_message": "Yi Input Method 1.2.0\n\nPress F4 to activate/deactivate Yi input mode\n\nCamille Dolma © 2025",
     "candidate_window_title": "Candidate Window",
     "radical_prefix": "Radical"
   },
   "fr": {
-    "tray_tooltip": "IME Yi - Appuyez sur F4 pour basculer le mode de saisie",
+    "tray_tooltip": "Input Method Yi - Appuyez sur F4 pour basculer le mode de saisie",
     "menu_input_mode": "Mode de saisie",
     "menu_yi_only": "Yi seulement",
     "menu_pinyin_yi": "Pinyin+Yi",
@@ -57,13 +57,13 @@
     "menu_about": "À propos",
     "menu_exit": "Quitter",
     "menu_language": "Langue",
-    "about_title": "À propos - IME Yi",
-    "about_message": "IME Yi 1.0.0\n\nAppuyez sur F4 pour activer/désactiver le mode de saisie Yi\n\nCamille Dolma © 2025",
+    "about_title": "À propos - Input Method Yi",
+    "about_message": "Input Method Yi 1.2.0\n\nAppuyez sur F4 pour activer/désactiver le mode de saisie Yi\n\nCamille Dolma © 2025",
     "candidate_window_title": "Fenêtre des candidats",
     "radical_prefix": "Radical"
   },
   "de": {
-    "tray_tooltip": "Yi IME - Drücken Sie F4 zum Umschalten des Eingabemodus",
+    "tray_tooltip": "Yi Input Method - Drücken Sie F4 zum Umschalten des Eingabemodus",
     "menu_input_mode": "Eingabemodus",
     "menu_yi_only": "Nur Yi",
     "menu_pinyin_yi": "Pinyin+Yi",
@@ -73,13 +73,13 @@
     "menu_about": "Über",
     "menu_exit": "Beenden",
     "menu_language": "Sprache",
-    "about_title": "Über - Yi IME",
-    "about_message": "Yi IME 1.0.0\n\nDrücken Sie F4 zum Aktivieren/Deaktivieren des Yi-Eingabemodus\n\nCamille Dolma © 2025",
+    "about_title": "Über - Yi Input Method",
+    "about_message": "Yi Input Method 1.2.0\n\nDrücken Sie F4 zum Aktivieren/Deaktivieren des Yi-Eingabemodus\n\nCamille Dolma © 2025",
     "candidate_window_title": "Kandidatenfenster",
     "radical_prefix": "Radikal"
   },
   "ru": {
-    "tray_tooltip": "Yi IME - Нажмите F4 для переключения режима ввода",
+    "tray_tooltip": "Yi Input Method - Нажмите F4 для переключения режима ввода",
     "menu_input_mode": "Режим ввода",
     "menu_yi_only": "Только Yi",
     "menu_pinyin_yi": "Пиньинь+Yi",
@@ -89,13 +89,13 @@
     "menu_about": "О программе",
     "menu_exit": "Выход",
     "menu_language": "Язык",
-    "about_title": "О программе - Yi IME",
-    "about_message": "Yi IME 1.0.0\n\nНажмите F4 для активации/деактивации режима ввода Yi\n\nCamille Dolma © 2025",
+    "about_title": "О программе - Yi Input Method",
+    "about_message": "Yi Input Method 1.2.0\n\nНажмите F4 для активации/деактивации режима ввода Yi\n\nCamille Dolma © 2025",
     "candidate_window_title": "Окно кандидатов",
     "radical_prefix": "Радикал"
   },
   "ja": {
-    "tray_tooltip": "Yi IME - F4キーで入力モードを切り替え",
+    "tray_tooltip": "Yi Input Method - F4キーで入力モードを切り替え",
     "menu_input_mode": "入力モード",
     "menu_yi_only": "Yiのみ",
     "menu_pinyin_yi": "ピンイン+Yi",
@@ -105,8 +105,8 @@
     "menu_about": "について",
     "menu_exit": "終了",
     "menu_language": "言語",
-    "about_title": "について - Yi IME",
-    "about_message": "Yi IME 1.0.0\n\nF4キーでYi入力モードを有効/無効にします\n\nCamille Dolma © 2025",
+    "about_title": "について - Yi Input Method",
+    "about_message": "Yi Input Method 1.2.0\n\nF4キーでYi入力モードを有効/無効にします\n\nCamille Dolma © 2025",
     "candidate_window_title": "候補ウィンドウ",
     "radical_prefix": "部首"
   },
@@ -122,7 +122,7 @@
     "menu_exit": "종료",
     "menu_language": "언어",
     "about_title": "정보 - 이족 입력기",
-    "about_message": "이족 입력기 1.0.0\n\nF4를 눌러 이족어 입력 모드를 활성화/비활성화\n\nCamille Dolma © 2025",
+    "about_message": "이족 입력기 1.2.0\n\nF4를 눌러 이족어 입력 모드를 활성화/비활성화\n\nCamille Dolma © 2025",
     "candidate_window_title": "후보 창",
     "radical_prefix": "부수"
   }
