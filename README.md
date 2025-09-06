@@ -1,5 +1,3 @@
-
-https://github.com/user-attachments/assets/90e02a27-4288-4c96-98f9-0754a39752cb
 # 彝文输入法 (Yi IME)
 
 一个基于 Rust 和原生 Windows API 开发的现代化标准彝文输入法，提供智能拼音输入、联想和候选词显示、全局快捷键支持。
@@ -82,6 +80,7 @@ https://github.com/user-attachments/assets/47afdae6-fba6-461f-b66a-713a29f0e61f
 ## 作者
 
 [Camille Dolma](https://github.com/tanpero)
+
 
 
 
