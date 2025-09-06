@@ -5,14 +5,12 @@
 #include <olectl.h>
 #include <comdef.h>
 
-// GUID定义
 EXTERN_C const GUID CLSID_YiTextService;
 EXTERN_C const GUID GUID_YiProfile;
 
-// 前向声明
 class YiTextService;
 
-// EditSession 类用于文本插入
+// 文本插入类
 class YiEditSession : public ITfEditSession {
 public:
     YiEditSession(YiTextService *pTextService, const WCHAR *pszText);
@@ -32,7 +30,6 @@ private:
     WCHAR *m_pszText;
 };
 
-// 导出的C接口函数
 extern "C" {
     __declspec(dllexport) int tsf_initialize();
     __declspec(dllexport) int tsf_insert_text(const char* text);
@@ -40,7 +37,7 @@ extern "C" {
     __declspec(dllexport) BOOL DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
 }
 
-// TSF文本服务类
+// TSF 文本服务类
 class YiTextService : public ITfTextInputProcessor,
                       public ITfThreadMgrEventSink,
                       public ITfTextEditSink,
@@ -76,13 +73,10 @@ public:
     STDMETHODIMP OnKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pfEaten);
     STDMETHODIMP OnPreservedKey(ITfContext *pContext, REFGUID rguid, BOOL *pfEaten);
 
-    // 文本插入方法
     HRESULT InsertText(const WCHAR *pszText);
     
-    // 备选文本插入方法
     HRESULT InsertTextViaSendInput(const WCHAR *pszText);
     
-    // 获取当前上下文（供 EditSession 使用）
     ITfContext* GetContext() { return m_pContext; }
 
 private:
@@ -100,7 +94,7 @@ private:
     HRESULT _UninitTextEditSink();
     HRESULT _InitKeyEventSink();
     HRESULT _UninitKeyEventSink();
-    HRESULT _GetFocusContext();  // 新增方法
+    HRESULT _GetFocusContext();
 };
 
 // 全局变量

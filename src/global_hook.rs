@@ -4,14 +4,12 @@ use winapi::shared::windef::*;
 use winapi::shared::minwindef::*;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver, channel};
-use crate::app_state::EnglishInputState; // 新增导入
-
+use crate::app_state::EnglishInputState;
 pub struct GlobalHook {
     hook: HHOOK,
     active: Arc<Mutex<bool>>,
     sender: Sender<KeyEvent>,
-    has_input: Arc<Mutex<bool>>, // 添加这个字段
-}
+    has_input: Arc<Mutex<bool>>,}
 
 #[derive(Debug, Clone)]
 pub struct KeyEvent {
@@ -21,14 +19,12 @@ pub struct KeyEvent {
     pub is_key_down: bool,
 }
 
-// 全局变量
 static mut GLOBAL_SENDER: Option<Sender<KeyEvent>> = None;
 static mut GLOBAL_ACTIVE: Option<Arc<Mutex<bool>>> = None;
 static mut GLOBAL_HAS_INPUT: Option<Arc<Mutex<bool>>> = None;
 static mut INPUT_BUFFER_EMPTY: bool = true;
 static mut INJECTING_TEXT: bool = false;
-static mut ENGLISH_INPUT_STATE: EnglishInputState = EnglishInputState::Yi; // 新增英文输入状态
-
+static mut ENGLISH_INPUT_STATE: EnglishInputState = EnglishInputState::Yi;
 impl GlobalHook {
     // 修改 new 方法
     pub fn new() -> (Self, Receiver<KeyEvent>) {
@@ -65,8 +61,6 @@ impl GlobalHook {
     
 }
 
-// 全局变量（用于回调函数）
-// 修改键盘处理函数
 unsafe extern "system" fn keyboard_proc(
     n_code: i32,
     w_param: WPARAM,
@@ -195,6 +189,7 @@ unsafe extern "system" fn keyboard_proc(
                 }
                 return 1; // 阻止按键传递给应用程序
             }
+
             // 处理数字键 1-9
             else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 && !ctrl_pressed && !alt_pressed {
                 println!("发送数字键事件: {}", kb_struct.vkCode);
@@ -211,6 +206,7 @@ unsafe extern "system" fn keyboard_proc(
                 }
                 return 1; // 阻止按键传递给应用程序
             }
+
             // 处理退格键
             else if kb_struct.vkCode == VK_BACK as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送退格键事件");
@@ -227,6 +223,7 @@ unsafe extern "system" fn keyboard_proc(
                 }
                 return 1; // 阻止按键传递给应用程序
             }
+
             // 处理空格键
             else if kb_struct.vkCode == VK_SPACE as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送空格键事件");
@@ -243,6 +240,7 @@ unsafe extern "system" fn keyboard_proc(
                 }
                 return 1; // 阻止按键传递给应用程序
             }
+
             // 处理ESC键
             else if kb_struct.vkCode == VK_ESCAPE as u32 && !ctrl_pressed && !alt_pressed {
                 println!("发送ESC键事件");
@@ -259,6 +257,7 @@ unsafe extern "system" fn keyboard_proc(
                 }
                 return 1; // 阻止按键传递给应用程序
             }
+
             // 处理特殊标点符号按键（缓冲区不为空时）
             else if !INPUT_BUFFER_EMPTY && (
                 kb_struct.vkCode == 0xDB || // [ 键
@@ -292,28 +291,24 @@ unsafe extern "system" fn keyboard_proc(
     CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param)
 }
 
-// 添加设置注入状态的函数
 pub fn set_injecting_text(injecting: bool) {
     unsafe {
         INJECTING_TEXT = injecting;
     }
 }
 
-// 添加设置输入缓冲区状态的函数
 pub fn set_input_buffer_empty(empty: bool) {
     unsafe {
         INPUT_BUFFER_EMPTY = empty;
     }
 }
 
-// 添加设置英文输入状态的函数
 pub fn set_english_input_state(state: EnglishInputState) {
     unsafe {
         ENGLISH_INPUT_STATE = state;
     }
 }
 
-// 添加获取英文输入状态的函数
 pub fn get_english_input_state() -> EnglishInputState {
     unsafe {
         ENGLISH_INPUT_STATE

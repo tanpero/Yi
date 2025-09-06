@@ -7,24 +7,21 @@ use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use winapi::um::libloaderapi::*;
 use std::sync::{Arc, Mutex};
-// 添加DWM API相关导入
 use winapi::um::dwmapi::*;
 use winapi::shared::winerror::*;
-// 添加注册表API用于检测系统主题
 use winapi::um::winreg::*;
 use winapi::um::winnt::*;
 
 const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
 
-// 添加全局候选词存储
 static mut GLOBAL_CANDIDATES: Option<Arc<Mutex<Vec<String>>>> = None;
 
 pub struct CandidateWindow {
     hwnd: HWND,
     candidates: Arc<Mutex<Vec<String>>>,
     selected_index: usize,
-    current_input: Arc<Mutex<String>>, // 添加当前输入的存储
-    is_dark_mode: bool, // 添加深色模式标识
+    current_input: Arc<Mutex<String>>,
+    is_dark_mode: bool,
 }
 
 impl CandidateWindow {
@@ -67,10 +64,10 @@ impl CandidateWindow {
             
             // 创建窗口
             CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED, // 添加WS_EX_LAYERED
+                WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
                 class_name.as_ptr(),
                 to_wide_string("候选词窗口").as_ptr(),
-                WS_POPUP, // 移除WS_BORDER以获得更好的毛玻璃效果
+                WS_POPUP,
                 0, 0, 300, 200,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -142,8 +139,7 @@ impl CandidateWindow {
             self.hide();
         }
     }
-    
-    // 添加缺失的 select_by_number 方法
+
     pub fn select_by_number(&mut self, number: usize) -> Option<String> {
         if let Ok(candidates) = self.candidates.lock() {
             if number > 0 && number <= candidates.len() {
@@ -153,7 +149,6 @@ impl CandidateWindow {
         None
     }
     
-    // 添加缺失的 get_selected_candidate 方法
     pub fn get_selected_candidate(&self) -> Option<String> {
         if let Ok(candidates) = self.candidates.lock() {
             if self.selected_index < candidates.len() {
@@ -163,14 +158,12 @@ impl CandidateWindow {
         None
     }
     
-    // 添加缺失的 hide 方法
     pub fn hide(&self) {
         unsafe {
             ShowWindow(self.hwnd, SW_HIDE);
         }
     }
     
-    // 添加获取候选词数量的方法
     pub fn get_candidates_count(&self) -> usize {
         if let Ok(candidates) = self.candidates.lock() {
             candidates.len()
@@ -263,7 +256,6 @@ fn detect_dark_mode() -> bool {
     }
 }
 
-// 添加启用毛玻璃效果的函数
 unsafe fn enable_blur_behind(hwnd: HWND, is_dark_mode: bool) -> Result<(), Box<dyn std::error::Error>> {
     if is_dark_mode {
         // 深色模式：保持现有的毛玻璃效果逻辑
@@ -306,7 +298,6 @@ unsafe fn enable_blur_behind(hwnd: HWND, is_dark_mode: bool) -> Result<(), Box<d
             std::mem::size_of::<BOOL>() as u32,
         );
         
-        // 添加窗口透明度设置，让背景更不透明
         SetLayeredWindowAttributes(
             hwnd,
             0, // 不使用颜色键
@@ -347,7 +338,6 @@ unsafe fn enable_blur_behind(hwnd: HWND, is_dark_mode: bool) -> Result<(), Box<d
     Ok(())
 }
 
-// 添加全局输入存储
 static mut GLOBAL_INPUT: Option<Arc<Mutex<String>>> = None;
 static mut GLOBAL_DARK_MODE: bool = false;
 

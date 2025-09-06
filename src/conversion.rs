@@ -2,7 +2,7 @@ use crate::ime::YiIME;
 use crate::segmentation::SegmentResult;
 
 impl YiIME {
-    /// 将分词结果转换为彝文
+    // 将分词结果转换为彝文
     pub fn convert_to_yi(&self, segment_result: &SegmentResult) -> Vec<String> {
         let mut yi_combinations = vec![String::new()];
         
@@ -26,7 +26,7 @@ impl YiIME {
         yi_combinations
     }
 
-    /// 智能转换：输入拼音序列，输出所有可能的彝文组合（包含部首）
+    // 智能转换：输入拼音序列，输出所有可能的彝文组合（包含部首）
     pub fn smart_convert(&self, input: &str) -> Vec<(String, Vec<String>, f32)> {
         // 检查输入末尾是否为w，进行特殊处理
         if input.ends_with('w') && input.len() > 1 {

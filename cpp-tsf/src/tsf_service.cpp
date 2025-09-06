@@ -5,18 +5,15 @@
 #include <codecvt>
 #include <vector>
 
-// GUID定义
 const GUID CLSID_YiTextService = 
 { 0x12345678, 0x1234, 0x5678, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
 
 const GUID GUID_YiProfile = 
 { 0x87654321, 0x4321, 0x8765, { 0x21, 0x43, 0x65, 0x87, 0xa9, 0xcb, 0xed, 0x0f } };
 
-// 全局变量
 YiTextService* g_pTextService = nullptr;
 HINSTANCE g_hInst = nullptr;
 
-// DLL入口点
 BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
@@ -29,7 +26,6 @@ BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     return TRUE;
 }
 
-// YiTextService实现
 YiTextService::YiTextService() {
     m_cRef = 1;
     m_pThreadMgr = nullptr;
@@ -44,7 +40,6 @@ YiTextService::~YiTextService() {
     Deactivate();
 }
 
-// IUnknown接口实现
 STDMETHODIMP YiTextService::QueryInterface(REFIID riid, void **ppvObj) {
     if (ppvObj == nullptr) return E_INVALIDARG;
     
@@ -83,7 +78,6 @@ STDMETHODIMP_(ULONG) YiTextService::Release() {
     return cr;
 }
 
-// ITfTextInputProcessor接口实现
 STDMETHODIMP YiTextService::Activate(ITfThreadMgr *pThreadMgr, TfClientId tfClientId) {
     m_pThreadMgr = pThreadMgr;
     m_tfClientId = tfClientId;
@@ -118,7 +112,6 @@ STDMETHODIMP YiTextService::Deactivate() {
     return S_OK;
 }
 
-// ITfThreadMgrEventSink接口实现
 STDMETHODIMP YiTextService::OnInitDocumentMgr(ITfDocumentMgr *pDocMgr) {
     return S_OK;
 }
@@ -145,12 +138,10 @@ STDMETHODIMP YiTextService::OnPopContext(ITfContext *pContext) {
     return S_OK;
 }
 
-// ITfTextEditSink接口实现
 STDMETHODIMP YiTextService::OnEndEdit(ITfContext *pContext, TfEditCookie ecReadOnly, ITfEditRecord *pEditRecord) {
     return S_OK;
 }
 
-// ITfKeyEventSink接口实现
 STDMETHODIMP YiTextService::OnSetFocus(BOOL fForeground) {
     return S_OK;
 }
@@ -180,7 +171,6 @@ STDMETHODIMP YiTextService::OnPreservedKey(ITfContext *pContext, REFGUID rguid, 
     return S_OK;
 }
 
-// 文本插入实现
 HRESULT YiTextService::InsertTextViaSendInput(const WCHAR *pszText) {
     if (!pszText) {
         return E_FAIL;
@@ -191,7 +181,6 @@ HRESULT YiTextService::InsertTextViaSendInput(const WCHAR *pszText) {
         return S_OK;
     }
     
-    // 创建INPUT结构数组
     std::vector<INPUT> inputs;
     inputs.reserve(len * 2); // 每个字符需要按下和释放
     
@@ -205,19 +194,15 @@ HRESULT YiTextService::InsertTextViaSendInput(const WCHAR *pszText) {
         input.ki.dwExtraInfo = 0;
         
         inputs.push_back(input);
-        
-        // 添加按键释放事件
         input.ki.dwFlags |= KEYEVENTF_KEYUP;
         inputs.push_back(input);
     }
     
-    // 发送输入事件
     UINT sent = SendInput((UINT)inputs.size(), inputs.data(), sizeof(INPUT));
     
     return (sent == inputs.size()) ? S_OK : E_FAIL;
 }
 
-// 修改InsertText方法，添加备选方案
 HRESULT YiTextService::InsertText(const WCHAR *pszText) {
     if (!pszText) {
         return E_FAIL;
@@ -241,7 +226,7 @@ HRESULT YiTextService::InsertText(const WCHAR *pszText) {
     }
     
     HRESULT hr = S_OK;
-    // 请求同步编辑会话，确保立即执行
+    
     HRESULT hrSession = m_pContext->RequestEditSession(m_tfClientId, pEditSession, TF_ES_READWRITE | TF_ES_SYNC, &hr);
     
     pEditSession->Release();
@@ -257,7 +242,6 @@ HRESULT YiTextService::InsertText(const WCHAR *pszText) {
     return hr;
 }
 
-// 私有方法实现
 HRESULT YiTextService::_InitThreadMgrSink() {
     if (!m_pThreadMgr) return E_FAIL;
     
@@ -357,6 +341,7 @@ HRESULT YiTextService::_GetFocusContext() {
     HRESULT hr = m_pThreadMgr->GetFocus(&pDocMgr);
     
     if (FAILED(hr) || !pDocMgr) {
+
         // 如果无法获取焦点，尝试枚举所有文档管理器
         IEnumTfDocumentMgrs *pEnumDocMgrs = nullptr;
         hr = m_pThreadMgr->EnumDocumentMgrs(&pEnumDocMgrs);
@@ -385,11 +370,10 @@ HRESULT YiTextService::_GetFocusContext() {
     return hr;
 }
 
-// C接口实现
 extern "C" {
     int tsf_initialize() {
         if (g_pTextService) {
-            return 0; // 已经初始化
+            return 0;
         }
         
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -451,7 +435,6 @@ extern "C" {
         WCHAR* wtext = new WCHAR[wlen];
         MultiByteToWideChar(CP_UTF8, 0, text, -1, wtext, wlen);
         
-        // 临时：直接使用SendInput方法
         HRESULT hr = g_pTextService->InsertTextViaSendInput(wtext);
         
         delete[] wtext;
@@ -470,13 +453,11 @@ extern "C" {
     }
 }
 
-// EditSession 类实现
 YiEditSession::YiEditSession(YiTextService *pTextService, const WCHAR *pszText) {
     m_cRef = 1;
     m_pTextService = pTextService;
     m_pTextService->AddRef();
     
-    // 复制文本
     size_t len = wcslen(pszText) + 1;
     m_pszText = new WCHAR[len];
     wcscpy_s(m_pszText, len, pszText);
@@ -537,13 +518,9 @@ STDMETHODIMP YiEditSession::DoEditSession(TfEditCookie ec) {
     }
     
     hr = pInsertAtSelection->InsertTextAtSelection(ec, 0, m_pszText, (LONG)wcslen(m_pszText), &pRange);
-    if (SUCCEEDED(hr)) {
-        if (pRange) {
+    if (SUCCEEDED(hr) && pRange) {
             pRange->Release();
-        } else {
-            }
-    } else {
-        }
+    }
     
     pInsertAtSelection->Release();
     
