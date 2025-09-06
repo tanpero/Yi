@@ -38,7 +38,7 @@ impl CandidateManager {
         }
         
         // 2. 检查是否应该进行声母联想（包括完整音节的联想）
-        if input_buffer.len() <= 3 && self.is_potential_consonant(input_buffer) {
+        if (input_buffer.len() <= 3 && self.is_potential_consonant(input_buffer)) || is_complete_syllable {
             // 收集声母联想结果
             let consonant_results = self.get_sorted_consonant_results(input_buffer);
             

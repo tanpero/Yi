@@ -95,7 +95,7 @@ unsafe extern "system" fn keyboard_proc(
                     if *state {
                         ENGLISH_INPUT_STATE = EnglishInputState::Yi;
                     }
-                    // println!("输入法状态: {}", if *state { "激活" } else { "关闭" });
+                    println!("输入法状态: {}", if *state { "激活" } else { "关闭" });
                 }
             }
             return 1; // 阻止F4传递给应用程序
@@ -109,7 +109,7 @@ unsafe extern "system" fn keyboard_proc(
         };
         
         if is_active {
-            // println!("输入法已激活，检查按键: vk_code={}", kb_struct.vkCode);
+            println!("输入法已激活，检查按键: vk_code={}", kb_struct.vkCode);
             
             // 处理Shift键和Caps Lock键（只在缓冲区为空时）
             if INPUT_BUFFER_EMPTY && is_key_down {
@@ -118,11 +118,11 @@ unsafe extern "system" fn keyboard_proc(
                     match ENGLISH_INPUT_STATE {
                         EnglishInputState::Yi => {
                             ENGLISH_INPUT_STATE = EnglishInputState::LowerCase;
-                            // println!("切换到英文小写输入模式");
+                            println!("切换到英文小写输入模式");
                         },
                         EnglishInputState::LowerCase | EnglishInputState::UpperCase => {
                             ENGLISH_INPUT_STATE = EnglishInputState::Yi;
-                            // println!("恢复彝文输入模式");
+                            println!("恢复彝文输入模式");
                         }
                     }
                     // 让系统处理Shift键，不拦截
@@ -134,11 +134,11 @@ unsafe extern "system" fn keyboard_proc(
                     match ENGLISH_INPUT_STATE {
                         EnglishInputState::Yi => {
                             ENGLISH_INPUT_STATE = EnglishInputState::UpperCase;
-                            // println!("切换到英文大写输入模式");
+                            println!("切换到英文大写输入模式");
                         },
                         EnglishInputState::LowerCase | EnglishInputState::UpperCase => {
                             ENGLISH_INPUT_STATE = EnglishInputState::Yi;
-                            // println!("恢复彝文输入模式");
+                            println!("恢复彝文输入模式");
                         }
                     }
                     // 让系统处理Caps Lock键，不拦截
@@ -151,7 +151,7 @@ unsafe extern "system" fn keyboard_proc(
                 // 在英文输入模式下，不拦截字母键，让系统处理
                 if matches!(ENGLISH_INPUT_STATE, EnglishInputState::LowerCase | EnglishInputState::UpperCase) {
                     if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A && !ctrl_pressed && !alt_pressed {
-                        // println!("英文输入模式，让系统处理字母键: {}", kb_struct.vkCode);
+                        println!("英文输入模式，让系统处理字母键: {}", kb_struct.vkCode);
                         return CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
                     }
                 }
@@ -159,7 +159,7 @@ unsafe extern "system" fn keyboard_proc(
                 // 在彝文输入模式下，只有在没有任何修饰键按下时才拦截字母键
                 if matches!(ENGLISH_INPUT_STATE, EnglishInputState::Yi) {
                     if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A && !ctrl_pressed && !alt_pressed && !shift_pressed {
-                        // println!("发送字母键事件: {}", kb_struct.vkCode);
+                        println!("发送字母键事件: {}", kb_struct.vkCode);
                         if let Some(ref sender) = GLOBAL_SENDER {
                             let event = KeyEvent {
                                 vk_code: kb_struct.vkCode,
@@ -168,7 +168,7 @@ unsafe extern "system" fn keyboard_proc(
                                 is_key_down,
                             };
                             if let Err(e) = sender.send(event) {
-                                // println!("发送事件失败: {:?}", e);
+                                println!("发送事件失败: {:?}", e);
                             }
                         }
                         return 1; // 阻止按键传递给应用程序
@@ -181,7 +181,7 @@ unsafe extern "system" fn keyboard_proc(
             
             // 处理字母键 A-Z（只有在没有修饰键时才作为输入处理）
             if kb_struct.vkCode >= 0x41 && kb_struct.vkCode <= 0x5A && !ctrl_pressed && !alt_pressed {
-                // println!("发送字母键事件: {}", kb_struct.vkCode);
+                println!("发送字母键事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -190,14 +190,14 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理数字键 1-9
             else if kb_struct.vkCode >= 0x31 && kb_struct.vkCode <= 0x39 && !ctrl_pressed && !alt_pressed {
-                // println!("发送数字键事件: {}", kb_struct.vkCode);
+                println!("发送数字键事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -206,14 +206,14 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理退格键
             else if kb_struct.vkCode == VK_BACK as u32 && !ctrl_pressed && !alt_pressed {
-                // println!("发送退格键事件");
+                println!("发送退格键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -222,14 +222,14 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理空格键
             else if kb_struct.vkCode == VK_SPACE as u32 && !ctrl_pressed && !alt_pressed {
-                // println!("发送空格键事件");
+                println!("发送空格键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -238,14 +238,14 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
             }
             // 处理ESC键
             else if kb_struct.vkCode == VK_ESCAPE as u32 && !ctrl_pressed && !alt_pressed {
-                // println!("发送ESC键事件");
+                println!("发送ESC键事件");
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -254,7 +254,7 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
@@ -268,7 +268,7 @@ unsafe extern "system" fn keyboard_proc(
                 kb_struct.vkCode == 0xBC || // , 键
                 kb_struct.vkCode == 0xBE    // . 键
             ) {
-                // println!("发送特殊标点符号事件: {}", kb_struct.vkCode);
+                println!("发送特殊标点符号事件: {}", kb_struct.vkCode);
                 if let Some(ref sender) = GLOBAL_SENDER {
                     let event = KeyEvent {
                         vk_code: kb_struct.vkCode,
@@ -277,7 +277,7 @@ unsafe extern "system" fn keyboard_proc(
                         is_key_down,
                     };
                     if let Err(e) = sender.send(event) {
-                        // println!("发送事件失败: {:?}", e);
+                        println!("发送事件失败: {:?}", e);
                     }
                 }
                 return 1; // 阻止按键传递给应用程序
