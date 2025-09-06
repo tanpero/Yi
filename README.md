@@ -10,7 +10,8 @@ https://github.com/user-attachments/assets/47afdae6-fba6-461f-b66a-713a29f0e61f
 > 👇 《世界人权宣言》第一条
 > 使用 HTML 注音模式输入
 
-https://github.com/user-attachments/assets/d641f594-dd2d-4a29-83a0-4061e89a2734
+
+https://github.com/user-attachments/assets/ef61cd01-040b-4185-80f7-ffd312dde940
 
 
 
@@ -86,6 +87,7 @@ https://github.com/user-attachments/assets/d641f594-dd2d-4a29-83a0-4061e89a2734
 ## 作者
 
 [Camille Dolma](https://github.com/tanpero)
+
 
 
 
