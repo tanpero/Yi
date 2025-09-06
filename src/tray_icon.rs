@@ -343,7 +343,7 @@ unsafe extern "system" fn tray_window_proc(
                     // 双击左键 - 显示关于对话框
                     MessageBoxW(
                         hwnd,
-                        to_wide_string("彝文输入法 v0.2.0\n\n按F4激活/关闭输入法").as_ptr(),
+                        to_wide_string("彝文输入法 v1.2.0\n\n按F4激活/关闭输入法").as_ptr(),
                         to_wide_string("彝文输入法").as_ptr(),
                         MB_OK | MB_ICONINFORMATION
                     );

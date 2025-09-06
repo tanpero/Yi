@@ -168,12 +168,14 @@ impl InputHandler {
             if should_commit {
                 // 先提交第一个候选词
                 if let Some(selected) = candidate_window.get_selected_candidate() {
-                                        
-                    // 提取实际的彝文文本
-                    let yi_text = self.extract_yi_text(&selected);
+                    // 提取彝文文本和拼音
+                    let (yi_text, pinyin) = self.extract_yi_and_pinyin(&selected);
                     
-                    // 组合文本：彝文 + 标点
-                    let combined_text = format!("{}{}", yi_text, punctuation_char);
+                    // 根据输入模式格式化文本
+                    let formatted_text = self.format_text_by_mode(&yi_text, &pinyin);
+                    
+                    // 组合文本：格式化后的文本 + 标点
+                    let combined_text = format!("{}{}", formatted_text, punctuation_char);
                     
                     // 设置正在注入文本的标志
                     crate::global_hook::set_injecting_text(true);
@@ -182,7 +184,7 @@ impl InputHandler {
                     text_injector.inject_text(&combined_text)?;
                     
                     // 等待文本注入完成
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                     
                     // 重置注入标志
                     crate::global_hook::set_injecting_text(false);
