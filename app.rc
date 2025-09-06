@@ -19,12 +19,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Yi IME"
             VALUE "FileDescription", "彝文输入法"
-            VALUE "FileVersion", "0.2.0"
+            VALUE "FileVersion", "1.2.0"
             VALUE "InternalName", "yi-global"
             VALUE "LegalCopyright", "Copyright (C) 2024"
             VALUE "OriginalFilename", "yi-global.exe"
             VALUE "ProductName", "彝文输入法"
-            VALUE "ProductVersion", "0.2.0"
+            VALUE "ProductVersion", "1.2.0"
         END
     END
     BLOCK "VarFileInfo"
